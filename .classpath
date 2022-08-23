@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<classpath>
+	<classpathentry kind="con" path="org.eclipse.jdt.launching.JRE_CONTAINER/org.eclipse.jdt.internal.debug.ui.launcher.StandardVMType/JavaSE-1.7">
+		<attributes>
+			<attribute name="module" value="true"/>
+		</attributes>
+	</classpathentry>
+	<classpathentry kind="src" path="src"/>
+	<classpathentry kind="lib" path="lib/BrunoMotaJapeFacade.jar"/>
+	<classpathentry kind="lib" path="lib/jape-4.6b292.jar"/>
+	<classpathentry kind="lib" path="lib/javax.ejb.jar"/>
+	<classpathentry kind="lib" path="lib/javax.servlet.jar"/>
+	<classpathentry kind="lib" path="lib/mge-modelcore-4.6b292.jar"/>
+	<classpathentry kind="lib" path="lib/mysql-connector-java-5.1.9.jar"/>
+	<classpathentry kind="lib" path="lib/SankhyaW-extensions.jar"/>
+	<classpathentry kind="lib" path="lib/sanutil-4.6b292.jar"/>
+	<classpathentry kind="output" path="bin"/>
+</classpath>
