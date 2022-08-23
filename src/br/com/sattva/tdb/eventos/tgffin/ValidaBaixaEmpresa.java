@@ -14,13 +14,11 @@ public class ValidaBaixaEmpresa implements EventoProgramavelJava {
 	@Override
 	public void afterDelete(PersistenceEvent arg0) throws Exception {
 		// TODO Auto-generated method stub
-
 	}
 
 	@Override
 	public void afterInsert(PersistenceEvent arg0) throws Exception {
 		// TODO Auto-generated method stub
-
 	}
 
 	@Override
@@ -56,20 +54,20 @@ public class ValidaBaixaEmpresa implements EventoProgramavelJava {
 				JapeWrapper contaDAO = JapeFactory.dao("ContaBancaria");
 				DynamicVO contaVO = contaDAO.findOne("CODCTABCOINT = ?", contaBaixa);
 				
-				BigDecimal empresaConta = contaVO.asBigDecimal("CODEMP");
+				BigDecimal empresaConta = contaVO.asBigDecimal("CODEMP");	
 				
 				if (empresaBaixa.compareTo(empresaConta) != 0) {
 					
 					JapeWrapper empresaDAO = JapeFactory.dao("Empresa");
-					DynamicVO empresaVO = empresaDAO.findOne("CODEMP = ?", empresaConta);
+					DynamicVO empresaVO = empresaDAO.findOne("CODEMP = ?", empresaBaixa);
 					
 					BigDecimal empresaMatriz = empresaVO.asBigDecimal("CODEMPMATRIZ");
 					
 					if (empresaMatriz == null) {
-						throw new Exception("\nA conta utilizada na baixa não pertence à essa empresa. Favor verificar!\n");
+						throw new Exception("\n<b>A conta utilizada na baixa não pertence à essa empresa. Favor verificar!</b>\n");
 					}
 					
-					if (empresaMatriz.compareTo(empresaBaixa) != 0) {
+					if (empresaMatriz.compareTo(empresaConta) != 0) {
 						throw new Exception("\n<b>A conta utilizada na baixa não pertence à essa empresa. Favor verificar!</b>\n");
 					}
 				}
