@@ -42,7 +42,7 @@ public class SplitPedidosAcao implements AcaoRotinaJava {
             	
             	JapeWrapper cabecalhoDAO = JapeFactory.dao("CabecalhoNota");
     	        JapeWrapper itemDAO = JapeFactory.dao("ItemNota");
-    	        JapeWrapper logDAO = JapeFactory.dao("AD_LOGTEMP");
+    	        JapeWrapper logDAO = JapeFactory.dao("AD_LOGSPLIT");
 
 	            public void doWithTx() throws Exception {
 	
@@ -137,8 +137,6 @@ public class SplitPedidosAcao implements AcaoRotinaJava {
                             			quebraEmp6.qtdNeg = saldo; 
                             			quebraPedido.add(quebraEmp6);
                             			
-                            			
-                        				
                         			} else {
                         				logDAO.create().set("DESCRICAO", ("Não é possivel fazer o split pois não tem estoque suficiente em todo o grupo").toCharArray()).save();
                         				TdbHelper.registraLogSplit("Não é possivel fazer o split pois não tem estoque suficiente em todo o grupo");
@@ -147,7 +145,8 @@ public class SplitPedidosAcao implements AcaoRotinaJava {
                     		}
                     	}
                     	
-                    	TdbHelper.transfereSaldo6x1(itensTransferencia);
+                    	BigDecimal nuNotaTransferencia = TdbHelper.transfereSaldo6x1(itensTransferencia);
+                    	logDAO.create().set("DESCRICAO", ("Nro. Unico. Transferencia: " + nuNotaTransferencia).toCharArray()).save();
                     	
                     	for (Split pedido : quebraPedido) {
                     		TdbHelper.geraLancamentosSplit(pedidoVO.asBigDecimal("NUNOTA"), pedido);                    		

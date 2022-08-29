@@ -108,7 +108,7 @@ public class TdbHelper {
 		// TODO Auto-generated method stub
 	}
 
-	public static void transfereSaldo6x1(Collection<Transferencia> itensTransferencia) throws Exception {
+	public static BigDecimal transfereSaldo6x1(Collection<Transferencia> itensTransferencia) throws Exception {
 		EntityFacade dwf = EntityFacadeFactory.getDWFFacade();
 		JapeWrapper produtoDAO = JapeFactory.dao("Produto");
 		JapeWrapper cabecalhoDAO = JapeFactory.dao("CabecalhoNota");
@@ -157,5 +157,7 @@ public class TdbHelper {
 			itemVO.clean();
 			
 		}
+		
+		return nuNotaTransf;
 	}
 }
