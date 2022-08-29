@@ -2,7 +2,10 @@ package br.com.sattva.tdb.utils;
 
 import java.math.BigDecimal;
 import java.sql.ResultSet;
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashMap;
+import java.util.Map;
 
 import com.sankhya.util.TimeUtils;
 
@@ -104,8 +107,72 @@ public class TdbHelper {
 		// TODO Auto-generated method stub
 	}
 
-	public static void geraLancamentosSplit(BigDecimal asBigDecimal, Split pedido) {
-		// TODO Auto-generated method stub
+	public static void geraLancamentosSplit(DynamicVO pedidoVO, Collection<Split> pedidosSplit) throws Exception {
+		System.out.println("[SattvaLog2.1A] ");
+		ArrayList<BigDecimal> nroUnicoNovosPedidos = new ArrayList<BigDecimal>();
+		ArrayList<BigDecimal> empresasCabecalho = new ArrayList<BigDecimal>();
+		System.out.println("[SattvaLog2.1AB] ");
+		empresasCabecalho.addAll(separaEmpresasCabecalho(pedidosSplit));
+		
+		System.out.println("[SattvaLog2.1] ");
+		
+		for (BigDecimal codEmp : empresasCabecalho) {
+			Map<String, Object> trocaInformacoesCab = new HashMap<>();
+			trocaInformacoesCab.put("CODEMP", codEmp);	
+			trocaInformacoesCab.put("OBSERVACAO", "Pedido gerado automaticamento pela regra de Split");	
+			Map<String, Object> pkNewNuNota = CentralNotasUtils.duplicaRegistro(pedidoVO, "CabecalhoNota", trocaInformacoesCab);
+			nroUnicoNovosPedidos.add((BigDecimal) pkNewNuNota.get("NUNOTA"));
+			
+			System.out.println("[SattvaLog2.2] ");
+			
+			for (Split pedido : pedidosSplit) {
+				if (pedido.codEmp.intValue() == codEmp.intValue()) {
+					insereItensEmpresa(pkNewNuNota, codEmp, pedido.codProd, pedido.qtdNeg, pedidoVO.asBigDecimal("NUNOTA"));
+				}
+			}
+			System.out.println("[SattvaLog2.3] ");
+		}
+		
+		for (BigDecimal nroUnico : nroUnicoNovosPedidos) {
+			CentralNotasUtils.refazerFinanceiro(nroUnico);
+		}
+		
+	}
+
+	private static void insereItensEmpresa(Map<String, Object> pkNewNuNota, BigDecimal codEmp, BigDecimal codProd, BigDecimal qtdNeg, BigDecimal nuNotaOrig) throws Exception {
+		EntityFacade dwf = EntityFacadeFactory.getDWFFacade();
+		
+		JapeWrapper itemDAO = JapeFactory.dao("ItemNota");
+		DynamicVO itemOrigemVO = itemDAO.findOne("NUNOTA = ? AND CODPROD = ?", nuNotaOrig, codProd);
+		
+		System.out.println("[SattvaLog2.2.1] ");
+		
+		JapeWrapper produtoDAO = JapeFactory.dao("Produto");
+		DynamicVO produtoVO = produtoDAO.findOne("CODPROD = ?", codProd);
+		DynamicVO itemVO = (DynamicVO) dwf.getDefaultValueObjectInstance("ItemNota");
+		itemVO.setProperty("NUNOTA", pkNewNuNota.get("NUNOTA"));
+		itemVO.setProperty("CODEMP", codEmp);
+		itemVO.setProperty("CODPROD", codProd);
+		itemVO.setProperty("QTDNEG", qtdNeg);
+		itemVO.setProperty("VLRUNIT", itemOrigemVO.asBigDecimal("VLRUNIT"));
+		itemVO.setProperty("VLRTOT", itemOrigemVO.asBigDecimal("VLRUNIT").multiply(qtdNeg));
+		itemVO.setProperty("CODVOL", produtoVO.asString("CODVOL"));
+		itemVO.setProperty("ATUALESTOQUE", BigDecimal.ONE);
+		itemVO.setProperty("RESERVA", "S");
+		dwf.createEntity("ItemNota", (EntityVO) itemVO);
+		
+	}
+
+	private static Collection<? extends BigDecimal> separaEmpresasCabecalho(Collection<Split> pedidosSplit) {
+		ArrayList<BigDecimal> empresasList = new ArrayList<BigDecimal>();
+		for (Split empresas : pedidosSplit) {
+			empresasList.add(empresas.codEmp);
+		}
+		ArrayList<BigDecimal> distinctEmp = TdbHelper.removeDuplicates(empresasList);
+		
+		return distinctEmp;
+		
+		
 	}
 
 	public static BigDecimal transfereSaldo6x1(Collection<Transferencia> itensTransferencia) throws Exception {
@@ -160,4 +227,96 @@ public class TdbHelper {
 		
 		return nuNotaTransf;
 	}
+	
+
+	public static Collection<Split> agrupaSplitPorEmpresa(Collection<Split> quebraPedido) {
+		//Separa itens empresa 1 e itens empresa 5
+		Collection<Split> itensEmpresa1 = new ArrayList<Split>();
+		Collection<Split> itensEmpresa5 = new ArrayList<Split>();
+		Collection<Split> itensEmpresa1Agrupado = new ArrayList<Split>();
+		Collection<Split> itensEmpresa1Agrupado2 = new ArrayList<Split>();
+		Collection<Split> itensEmpresa5Agrupado = new ArrayList<Split>();
+		Collection<Split> itensEmpresa5Agrupado2 = new ArrayList<Split>();
+		Collection<Split> finalSplit = new ArrayList<Split>();
+		
+		for (Split pedido : quebraPedido) {	
+			if (pedido.codEmp.intValue() == 1) {
+				itensEmpresa1.add(pedido);
+			} else {
+				itensEmpresa5.add(pedido);
+			}
+		}
+		
+		ArrayList<BigDecimal> produtosEmpresa1 = new ArrayList<BigDecimal>();
+		for(Split emp1 : itensEmpresa1) {
+			produtosEmpresa1.add(emp1.codProd);
+		}
+		
+		ArrayList<BigDecimal> produtosEmpresa5 = new ArrayList<BigDecimal>();
+		for(Split emp5 : itensEmpresa5) {
+			produtosEmpresa5.add(emp5.codProd);
+		}
+		
+		ArrayList<BigDecimal> produtosDistinctEmp1 = TdbHelper.removeDuplicates(produtosEmpresa1);
+		ArrayList<BigDecimal> produtosDistinctEmp5 = TdbHelper.removeDuplicates(produtosEmpresa5);
+		
+		for (BigDecimal produtoEmpresa1 : produtosDistinctEmp1) {
+			Split s = new Split(new BigDecimal("1"), produtoEmpresa1, BigDecimal.ZERO);
+			itensEmpresa1Agrupado.add(s);			
+		}
+		
+		for (BigDecimal produtoEmpresa5 : produtosDistinctEmp5) {
+			Split s = new Split(new BigDecimal("5"), produtoEmpresa5, BigDecimal.ZERO);
+			itensEmpresa5Agrupado.add(s);			
+		}
+		
+		for (Split sp : itensEmpresa1Agrupado) {
+			BigDecimal qtdSomada = BigDecimal.ZERO;
+			for (Split ie1 : itensEmpresa1) {
+				if(ie1.codProd.intValue() == sp.codProd.intValue()) {
+					qtdSomada = qtdSomada.add(ie1.qtdNeg);
+				}
+			}
+			
+			itensEmpresa1Agrupado2.add(new Split(new BigDecimal("1"), sp.codProd, qtdSomada));
+		}
+		
+		for (Split sp : itensEmpresa5Agrupado) {
+			BigDecimal qtdSomada = BigDecimal.ZERO;
+			for (Split ie1 : itensEmpresa5) {
+				if(ie1.codProd.intValue() == sp.codProd.intValue()) {
+					qtdSomada = qtdSomada.add(ie1.qtdNeg);
+				}
+			}
+			
+			itensEmpresa5Agrupado2.add(new Split(new BigDecimal("5"), sp.codProd, qtdSomada));
+		}
+		
+		finalSplit.addAll(itensEmpresa1Agrupado2);
+		finalSplit.addAll(itensEmpresa5Agrupado2);
+		
+		return finalSplit;
+		
+	}
+	
+	
+	public static <T> ArrayList<T> removeDuplicates(ArrayList<T> list) {
+  
+        // Create a new ArrayList
+        ArrayList<T> newList = new ArrayList<T>();
+  
+        // Traverse through the first list
+        for (T element : list) {
+  
+            // If this element is not present in newList
+            // then add it
+            if (!newList.contains(element)) {
+  
+                newList.add(element);
+            }
+        }
+  
+        // return the new list
+        return newList;
+    }
 }

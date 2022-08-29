@@ -102,7 +102,7 @@ public class SplitPedidos implements ScheduledAction {
                     	}
                     	
                     	for (Split pedido : quebraPedido) {
-                    		TdbHelper.geraLancamentosSplit(pedidoVO.asBigDecimal("NUNOTA"), pedido);
+//                    		TdbHelper.geraLancamentosSplit(pedidoVO, pedido);
 //                    		System.out.println(pedido.toString());
                     		
                     		logDAO.create().set("DESCRICAO", pedido.toString()).save();
