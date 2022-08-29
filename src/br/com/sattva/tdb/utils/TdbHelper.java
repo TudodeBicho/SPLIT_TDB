@@ -15,8 +15,10 @@ import br.com.sankhya.jape.vo.DynamicVO;
 import br.com.sankhya.jape.vo.EntityVO;
 import br.com.sankhya.jape.wrapper.JapeFactory;
 import br.com.sankhya.jape.wrapper.JapeWrapper;
+import br.com.sankhya.modelcore.comercial.CentralFinanceiro;
 import br.com.sankhya.modelcore.comercial.ComercialUtils;
 import br.com.sankhya.modelcore.comercial.PrecoCustoHelper;
+import br.com.sankhya.modelcore.comercial.impostos.ImpostosHelpper;
 import br.com.sankhya.modelcore.helper.CalculoPrecosCustosHelper;
 import br.com.sankhya.modelcore.util.EntityFacadeFactory;
 import br.com.sankhya.modelcore.util.MGEComercialUtil;
@@ -108,33 +110,91 @@ public class TdbHelper {
 	}
 
 	public static void geraLancamentosSplit(DynamicVO pedidoVO, Collection<Split> pedidosSplit) throws Exception {
-		System.out.println("[SattvaLog2.1A] ");
+
 		ArrayList<BigDecimal> nroUnicoNovosPedidos = new ArrayList<BigDecimal>();
 		ArrayList<BigDecimal> empresasCabecalho = new ArrayList<BigDecimal>();
-		System.out.println("[SattvaLog2.1AB] ");
+
 		empresasCabecalho.addAll(separaEmpresasCabecalho(pedidosSplit));
-		
-		System.out.println("[SattvaLog2.1] ");
 		
 		for (BigDecimal codEmp : empresasCabecalho) {
 			Map<String, Object> trocaInformacoesCab = new HashMap<>();
-			trocaInformacoesCab.put("CODEMP", codEmp);	
+			trocaInformacoesCab.put("CODEMP", codEmp);
 			trocaInformacoesCab.put("OBSERVACAO", "Pedido gerado automaticamento pela regra de Split");	
+			trocaInformacoesCab.put("ORDEMCARGA", null);
+			
+			if (codEmp.intValue() != 5) {
+				trocaInformacoesCab.put("VLRFRETE", BigDecimal.ZERO);
+				
+			} else {
+				
+				String transportadoras = "'CORREIOS'-'CORREIOS PAC'-'CORREIOS SEDEX'";
+				String bhMetodo = transportadoras.indexOf(pedidoVO.asString("BH_METODO")) > -1 ? pedidoVO.asString("BH_METODO") : "JADLOG PACKAGE";
+				BigDecimal codParcTrans = localizaTransportadoraByMetodo(bhMetodo);
+				
+				trocaInformacoesCab.put("VLRFRETE", pedidoVO.asBigDecimal("VLRFRETE"));
+				trocaInformacoesCab.put("BH_METODO", bhMetodo);
+				trocaInformacoesCab.put("CODPARCTRANSP", codParcTrans);
+			}
+			
 			Map<String, Object> pkNewNuNota = CentralNotasUtils.duplicaRegistro(pedidoVO, "CabecalhoNota", trocaInformacoesCab);
 			nroUnicoNovosPedidos.add((BigDecimal) pkNewNuNota.get("NUNOTA"));
-			
-			System.out.println("[SattvaLog2.2] ");
 			
 			for (Split pedido : pedidosSplit) {
 				if (pedido.codEmp.intValue() == codEmp.intValue()) {
 					insereItensEmpresa(pkNewNuNota, codEmp, pedido.codProd, pedido.qtdNeg, pedidoVO.asBigDecimal("NUNOTA"));
 				}
 			}
-			System.out.println("[SattvaLog2.3] ");
 		}
 		
+		vinculaTgfvar(nroUnicoNovosPedidos, pedidoVO.asBigDecimal("NUNOTA"));
+		
 		for (BigDecimal nroUnico : nroUnicoNovosPedidos) {
-			CentralNotasUtils.refazerFinanceiro(nroUnico);
+			recalculaImpostoFinanceiro(nroUnico);
+			
+		}
+		
+	}
+
+	private static BigDecimal localizaTransportadoraByMetodo(String bhMetodo) throws Exception {
+		JapeWrapper parceiroDAO = JapeFactory.dao("Parceiro");
+		DynamicVO parceiroVO = parceiroDAO.findOne("AD_METODOSDEENVIO = ?", bhMetodo);
+		return parceiroVO.asBigDecimal("CODPARC");
+	}
+
+	private static void recalculaImpostoFinanceiro(BigDecimal nroUnico) throws Exception {
+		ImpostosHelpper ih = new ImpostosHelpper();
+		ih.setForcarRecalculo(true);
+		ih.calcularImpostos(nroUnico);
+
+		CentralFinanceiro financeiro = new CentralFinanceiro();		
+		financeiro.inicializaNota(nroUnico);
+		financeiro.refazerFinanceiro();
+		
+	}
+
+	private static void vinculaTgfvar(ArrayList<BigDecimal> nroUnicoNovosPedidos, BigDecimal nuNotaOriginal) throws Exception {
+		JapeWrapper tgfvarDAO = JapeFactory.dao("CompraVendavariosPedido");
+		JapeWrapper itemDAO = JapeFactory.dao("ItemNota");
+		
+		System.out.println("[SattvaLog9] ");
+		
+		for (BigDecimal nroUnico : nroUnicoNovosPedidos) {
+			
+			Collection<DynamicVO> itensNewVO = itemDAO.find("NUNOTA = ?", nroUnico);
+			for (DynamicVO itemNewVO : itensNewVO) {
+				
+				DynamicVO itemOldVO = itemDAO.findOne("NUNOTA = ? AND CODPROD = ?", nuNotaOriginal, itemNewVO.asBigDecimal("CODPROD"));
+				
+				tgfvarDAO.create()
+				.set("NUNOTA", nroUnico)
+				.set("SEQUENCIA", itemNewVO.asBigDecimal("SEQUENCIA"))
+				.set("NUNOTAORIG", itemOldVO.asBigDecimal("NUNOTA"))
+				.set("SEQUENCIAORIG", itemOldVO.asBigDecimal("SEQUENCIA"))
+				.set("QTDATENDIDA", itemNewVO.asBigDecimal("QTDNEG"))
+				.save();
+				
+			}
+			
 		}
 		
 	}
@@ -154,6 +214,7 @@ public class TdbHelper {
 		itemVO.setProperty("CODEMP", codEmp);
 		itemVO.setProperty("CODPROD", codProd);
 		itemVO.setProperty("QTDNEG", qtdNeg);
+		itemVO.setProperty("CODLOCALORIG", itemOrigemVO.asBigDecimal("CODLOCALORIG"));
 		itemVO.setProperty("VLRUNIT", itemOrigemVO.asBigDecimal("VLRUNIT"));
 		itemVO.setProperty("VLRTOT", itemOrigemVO.asBigDecimal("VLRUNIT").multiply(qtdNeg));
 		itemVO.setProperty("CODVOL", produtoVO.asString("CODVOL"));
@@ -301,7 +362,6 @@ public class TdbHelper {
 	
 	
 	public static <T> ArrayList<T> removeDuplicates(ArrayList<T> list) {
-  
         // Create a new ArrayList
         ArrayList<T> newList = new ArrayList<T>();
   
@@ -311,7 +371,6 @@ public class TdbHelper {
             // If this element is not present in newList
             // then add it
             if (!newList.contains(element)) {
-  
                 newList.add(element);
             }
         }

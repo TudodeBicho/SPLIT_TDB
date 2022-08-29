@@ -81,6 +81,14 @@ public class Teste {
 			System.out.println(aa.toString());
 		}
 		
+		String t = "'CORREIOS'-'CORREIOS PAC'-'CORREIOS SEDEX'";
+		if (t.indexOf("CORREIOS SEDEX") > -1) {
+			System.out.println("Localizou!!!");
+		} else {
+			System.out.println("Nao Localizou!!!");
+		}
+		
+		
 		
 		
 	}

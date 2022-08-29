@@ -23,9 +23,9 @@ public class SplitPedidosAcao implements AcaoRotinaJava {
 
 	@Override
 	public void doAction(ContextoAcao arg0) throws Exception {
-		final BigDecimal empresa5 = new BigDecimal("5");
-		final BigDecimal empresa1 = new BigDecimal("1");
-		final BigDecimal empresa6 = new BigDecimal("6");
+		final BigDecimal empresa5 = new BigDecimal("5"); // Extrema
+		final BigDecimal empresa1 = new BigDecimal("1"); // TDB
+		final BigDecimal empresa6 = new BigDecimal("6"); // Loja
 			
 		String nuNotaString = arg0.getParam("NUNOTA")+"";
 		final BigDecimal nuNota = new BigDecimal(nuNotaString);
@@ -56,7 +56,7 @@ public class SplitPedidosAcao implements AcaoRotinaJava {
                     for (DynamicVO pedidoVO : pedidosValidos) {//Ordem de checagem de estoque: Extrema(5), TDB(1), Loja(6)
                     	
                     	Collection<DynamicVO> itensPedido = itemDAO.find("NUNOTA = ?", pedidoVO.asBigDecimal("NUNOTA"));
-                    	Collection<Split> quebraPedido = new ArrayList<Split>();
+                    	Collection<Split> splitPedidos = new ArrayList<Split>();
                     	Collection<Transferencia> itensTransferencia = new ArrayList<Transferencia>();
                     	
                     	for (DynamicVO itemPedidoVO : itensPedido) {
@@ -73,105 +73,85 @@ public class SplitPedidosAcao implements AcaoRotinaJava {
                     				+ ", estoqueDisponivelEmp1: " + estDisponivelEmp1
                     				+ ", estoqueDisponivelEmp6: " + estDisponivelEmp6;
                     		
-                    		logDAO.create().set("DESCRICAO", (log).toCharArray()).save();
-                    		
-                    		boolean temDisponivelEmp5 = estDisponivelEmp5.doubleValue() > 0 
-                    									&& saldo.doubleValue() <= estDisponivelEmp5.doubleValue();
+                    		boolean temDisponivelEmp5 = 
+                    				estDisponivelEmp5.doubleValue() > 0 
+                    				&& saldo.doubleValue() <= estDisponivelEmp5.doubleValue();
                     		
                     		if (temDisponivelEmp5) {
+                    			
                     			log += "\nTEM disponibilidade total empresa 5";
-                    			logDAO.create().set("DESCRICAO", ("TEM disponibilidade total empresa 5").toCharArray()).save();
-                    			Split quebraEmp5 = new Split();
-                    			quebraEmp5.codEmp = new BigDecimal("5");
-                    			quebraEmp5.codProd = codProd;
-                    			quebraEmp5.qtdNeg = saldo; 
-                    			quebraPedido.add(quebraEmp5);
+                    			
+                    			Split quebraEmp5 = new Split(new BigDecimal("5"), codProd, saldo);
+                    			splitPedidos.add(quebraEmp5);
+                    			
                     		} else {
-                    			Split quebraEmp5 = new Split();
-                    			quebraEmp5.codEmp = new BigDecimal("5");
-                    			quebraEmp5.codProd = codProd;
-                    			quebraEmp5.qtdNeg = estDisponivelEmp5; 
-                    			quebraPedido.add(quebraEmp5);
+                    			
+                    			Split quebraEmp5 = new Split(new BigDecimal("5"), codProd, estDisponivelEmp5);
+                    			splitPedidos.add(quebraEmp5);
                     			
                     			saldo = qtdNeg.subtract(estDisponivelEmp5);
                     			
-                    			log += "NÃO TEM disponibilidade total empresa 5" + ", Saldo remanescente: " + saldo;
-                    			logDAO.create().set("DESCRICAO", (log).toCharArray()).save();
+                    			log += "\nNÃO TEM disponibilidade total empresa 5" + ", Saldo remanescente: " + saldo;
                     			
-                    			boolean temDisponivelEmp1 = saldo.doubleValue() > 0 
-                    										&& estDisponivelEmp1.doubleValue() > 0 
-                    										&& saldo.doubleValue() <= estDisponivelEmp1.doubleValue();
+                    			boolean temDisponivelEmp1 = 
+                    					saldo.doubleValue() > 0 
+                    					&& estDisponivelEmp1.doubleValue() > 0 
+                    					&& saldo.doubleValue() <= estDisponivelEmp1.doubleValue();
                     										
                     			if (temDisponivelEmp1) {
                     				log += "\nTEM disponibilidade total empresa 1";
-                    				logDAO.create().set("DESCRICAO", ("TEM disponibilidade total empresa 1").toCharArray()).save();
-                    				Split quebraEmp1 = new Split();
-                        			quebraEmp1.codEmp = new BigDecimal("1");
-                        			quebraEmp1.codProd = codProd;
-                        			quebraEmp1.qtdNeg = saldo; 
-                        			quebraPedido.add(quebraEmp1);
+                    				
+                    				Split quebraEmp1 = new Split(new BigDecimal("1"), codProd, saldo);
+                        			splitPedidos.add(quebraEmp1);
+                        			
                     			} else {
-                    				Split quebraEmp1 = new Split();
-                        			quebraEmp1.codEmp = new BigDecimal("1");
-                        			quebraEmp1.codProd = codProd;
-                        			quebraEmp1.qtdNeg = estDisponivelEmp1; 
-                        			quebraPedido.add(quebraEmp1);
+                    				
+                    				Split quebraEmp1 = new Split(new BigDecimal("1"), codProd, estDisponivelEmp1);
+                        			splitPedidos.add(quebraEmp1);
                         			
                         			saldo = saldo.subtract(estDisponivelEmp1);
                         			
                         			log += "\nNÃO TEM disponibilidade total empresa 1" + ", Saldo remanescente: " + saldo;
-                        			logDAO.create().set("DESCRICAO", (log).toCharArray()).save();
                         			
                         			if (saldo.doubleValue() <= estDisponivelEmp6.doubleValue() && saldo.doubleValue() > 0) {
+                        			
                         				log += "\nTEM disponibilidade total para transferencia da empresa 6 p/ 1";
-                        				log += "\nTransferindo quantidade necessária empresa 6 para 1: " + saldo;
-                        				logDAO.create().set("DESCRICAO", ("TEM disponibilidade total para transferencia da empresa 6 p/ 1").toCharArray()).save();
-                        				logDAO.create().set("DESCRICAO", ("Transferindo quantidade necessária empresa 6 para 1: " + saldo).toCharArray()).save();
+                        				log += "\nTransferindo quantidade necessária empresa 6 para 1: Quantidade" + saldo;
 
                         				itensTransferencia.add(new Transferencia(codProd, saldo));
                         				
-                        				Split quebraEmp6 = new Split();
-                            			quebraEmp6.codEmp = new BigDecimal("1");
-                            			quebraEmp6.codProd = codProd;
-                            			quebraEmp6.qtdNeg = saldo; 
-                            			quebraPedido.add(quebraEmp6);
+                        				Split quebraEmp6 = new Split(new BigDecimal("1"), codProd, saldo);
+                            			splitPedidos.add(quebraEmp6);
                             			
                         			} else {
+                        				
                         				log += "\nNão é possivel fazer o split pois não tem estoque suficiente em todo o grupo";
-                        				logDAO.create().set("DESCRICAO", ("Não é possivel fazer o split pois não tem estoque suficiente em todo o grupo").toCharArray()).save();
                         				TdbHelper.registraLogSplit("Não é possivel fazer o split pois não tem estoque suficiente em todo o grupo");
+                        				
                         			}
                     			}
                     		}
                     	}
                     	
-                    	System.out.println("[SattvaLog] " + log);
-                    	
                     	BigDecimal nuNotaTransferencia = TdbHelper.transfereSaldo6x1(itensTransferencia);
                     	log += "\nNro. Unico. Transferencia: " + nuNotaTransferencia;
-                    	logDAO.create().set("DESCRICAO", ("Nro. Unico. Transferencia: " + nuNotaTransferencia).toCharArray()).save();
                     	
-                    	Collection<Split> pedidosSplit = TdbHelper.agrupaSplitPorEmpresa(quebraPedido);
-                    	System.out.println("[SattvaLog2] " + log);
+                    	Collection<Split> pedidosSplit = TdbHelper.agrupaSplitPorEmpresa(splitPedidos);
+
                     	TdbHelper.geraLancamentosSplit(pedidoVO, pedidosSplit);
                     	
-                    	System.out.println("[SattvaLog3] " + log);
-
                     	for (Split pedido : pedidosSplit) {
                     		log += "\n" + pedido.toString();
-                    		logDAO.create().set("DESCRICAO", pedido.toString().toCharArray()).save();
                     	}
-                    	System.out.println("[SattvaLog4] " + log);
                     }
                     
                     logDAO.create().set("DESCRICAO", log.toCharArray()).save();
 	            }
-	
 	    });
 			
 		} catch (Exception e) {
-//			arg0.mostraErro(e.toString());
-			System.out.println("Split Error: " + e.toString());
+			arg0.mostraErro(e.toString());
+			System.out.println("[Sattva]Split Error: " + e.toString());
 		}finally {
 			JapeSession.close(hnd);
 		}
