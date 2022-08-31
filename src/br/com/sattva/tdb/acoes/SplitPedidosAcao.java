@@ -27,22 +27,19 @@ import br.com.sattva.tdb.utils.CentralNotasUtils;
 import br.com.sattva.tdb.utils.TdbHelper;
 
 public class SplitPedidosAcao implements AcaoRotinaJava {
+	public String statusProcessamento = "S";
+	public String msgStatus = "";
 
 	@Override
-	public void doAction(ContextoAcao arg0) throws Exception {
+	public void doAction(final ContextoAcao arg0) throws Exception {
 		
 		final BigDecimal empresa5 = new BigDecimal("5"); // Extrema
 		final BigDecimal empresa1 = new BigDecimal("1"); // TDB
 		final BigDecimal empresa6 = new BigDecimal("6"); // Loja
-			
 		String nuNotaString = arg0.getParam("NUNOTA")+"";
 		final BigDecimal nuNota = new BigDecimal(nuNotaString);
 		
 		SessionHandle hnd = null;
-		
-		/*
-		 * Tratar exceção. pedido confirmado não pode ser alterado
-		 * */
 		
 		try {
 			
@@ -57,16 +54,17 @@ public class SplitPedidosAcao implements AcaoRotinaJava {
 	            public void doWithTx() throws Exception {
 	
 	            	String log = "";
-	            	String filtroCabecalho = "PENDENTE = 'S' "
+	            	String filtroPedidosAptos = "PENDENTE = 'S' "
                     				+ "AND CODVEND = 14 AND CODCIDDESTINO NOT IN (4798, 2475) "
                     				+ "AND CODTIPOPER = 3102 "
                     				+ "AND NOT EXISTS (SELECT 1 FROM TGFVAR V WHERE TGFCAB.NUNOTA = V.NUNOTAORIG) "
                     				+ "AND DTNEG >= '02/02/2022' AND CODEMP = 1";
 	            	
-	            	filtroCabecalho = "NUNOTA = " + nuNota;
+	            	filtroPedidosAptos = "NUNOTA = " + nuNota;
 	            	
-                    Collection<DynamicVO> pedidosValidos = cabecalhoDAO.find(filtroCabecalho);
-                    for (DynamicVO pedidoVO : pedidosValidos) {//Ordem de checagem de estoque: Extrema(5), TDB(1), Loja(6)
+                    Collection<DynamicVO> pedidosValidos = cabecalhoDAO.find(filtroPedidosAptos);
+                    for (DynamicVO pedidoVO : pedidosValidos) {
+                    //Ordem de checagem de estoque: Extrema(5), TDB(1), Loja(6)
                     	
                     	Collection<DynamicVO> itensPedido = itemDAO.find("NUNOTA = ?", pedidoVO.asBigDecimal("NUNOTA"));
                     	Collection<Split> splitPedidos = new ArrayList<Split>();
@@ -80,7 +78,6 @@ public class SplitPedidosAcao implements AcaoRotinaJava {
                     		BigDecimal saldo = qtdNeg;
                     		
                     		DynamicVO produtoVO = produtoDAO.findOne("CODPROD = ?", codProd);
-                    		
                     		if("D".equals(produtoVO.asString("USOPROD"))) {
                     			continue;
                     		}
@@ -147,19 +144,33 @@ public class SplitPedidosAcao implements AcaoRotinaJava {
                             			splitPedidos.add(quebraEmp6);
                             			
                         			} else {
-                        				
                         				log += "\nNão é possivel fazer o split pois não tem estoque suficiente em todo o grupo";
                         				TdbHelper.registraLogSplit("Não é possivel fazer o split pois não tem estoque suficiente em todo o grupo");
-                        				
                         			}
                     			}
                     		}
                     	}
                     	
                     	if(geraTransferencia) {
-                    		Map<String, BigDecimal> nroUnicoTransf = TdbHelper.transfereSaldo6x1(itensTransferencia);
-                    		log += "\nNro.Unico.Transferencia Saida: " + nroUnicoTransf.get("NUNOTATRANSFSAIDA");
-                    		log += "\nNro.Unico.Transferencia Entrada: " + nroUnicoTransf.get("NUNOTATRANSFENTRADA");                    		
+                    		try {
+                    			Map<String, BigDecimal> nroUnicoTransf = TdbHelper.transfereSaldo6x1(itensTransferencia);
+                    			log += "\nNro.Unico.Transferencia Saida: " + nroUnicoTransf.get("NUNOTATRANSFSAIDA");
+                        		log += "\nNro.Unico.Transferencia Entrada: " + nroUnicoTransf.get("NUNOTATRANSFENTRADA");
+							} catch (Exception e) {
+								statusProcessamento = "E";
+								msgStatus = e.toString();
+								logDAO.create()
+		                    	.set("DESCRICAO", log.toCharArray())
+		                    	.set("NUNOTAORIG", pedidoVO.asBigDecimal("NUNOTA"))
+		                    	.set("DHINCLUSAO", TimeUtils.getNow())
+		                    	.set("STATUSPROCESSAMENTO", statusProcessamento)
+		                    	.set("MSGSTATUS", msgStatus)
+		                    	.save();
+								
+								arg0.mostraErro(e.toString());
+								return;
+								
+							}
                     	}
                     	
                     	Collection<Split> pedidosSplit = TdbHelper.agrupaSplitPorEmpresa(splitPedidos);
@@ -167,19 +178,13 @@ public class SplitPedidosAcao implements AcaoRotinaJava {
                     	
                     	for (Split pedido : pedidosSplit) {
                     		for (Map.Entry<BigDecimal, BigDecimal> nuNotaEmp : listaNroUnicoEmpresa.entrySet()) {
-                    			
                     			if (nuNotaEmp.getKey().intValue() == 1 && pedido.codEmp.intValue() == 1) {
                     				log += "\n" + "[NUNOTA: " + nuNotaEmp.getValue() + "] " +  pedido.toString();
                     			}
-                    			
                     			if (nuNotaEmp.getKey().intValue() == 5 && pedido.codEmp.intValue() == 5) {
                     				log += "\n" + "[NUNOTA: " + nuNotaEmp.getValue() + "] " +  pedido.toString();
                     			}
-                    			
                         	}
-                    		
-                    		
-//                    		log += "\n" + pedido.toString();
                     	}
                     	
                     	cabecalhoDAO.prepareToUpdate(pedidoVO)
@@ -194,9 +199,7 @@ public class SplitPedidosAcao implements AcaoRotinaJava {
                     	.set("NUNOTAORIG", pedidoVO.asBigDecimal("NUNOTA"))
                     	.set("DHINCLUSAO", TimeUtils.getNow())
                     	.save();
-
                     }
-                    
 	            }
 	    });
 			
