@@ -2,6 +2,7 @@ package br.com.sattva.tdb.utils;
 
 import java.math.BigDecimal;
 import java.sql.ResultSet;
+import java.sql.Timestamp;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -109,18 +110,22 @@ public class TdbHelper {
 		// TODO Auto-generated method stub
 	}
 
-	public static void geraLancamentosSplit(DynamicVO pedidoVO, Collection<Split> pedidosSplit) throws Exception {
+	public static Map<BigDecimal, BigDecimal> geraLancamentosSplit(DynamicVO pedidoVO, Collection<Split> pedidosSplit) throws Exception {
 
 		ArrayList<BigDecimal> nroUnicoNovosPedidos = new ArrayList<BigDecimal>();
 		ArrayList<BigDecimal> empresasCabecalho = new ArrayList<BigDecimal>();
+		Map<BigDecimal, BigDecimal> nuNotaCodEmp = new HashMap<BigDecimal, BigDecimal>();
 
 		empresasCabecalho.addAll(separaEmpresasCabecalho(pedidosSplit));
 		
 		for (BigDecimal codEmp : empresasCabecalho) {
 			Map<String, Object> trocaInformacoesCab = new HashMap<>();
 			trocaInformacoesCab.put("CODEMP", codEmp);
-			trocaInformacoesCab.put("OBSERVACAO", "Pedido gerado automaticamento pela regra de Split");	
+			trocaInformacoesCab.put("CODEMPNEGOC", codEmp);
+//			trocaInformacoesCab.put("OBSERVACAO", "Pedido gerado automaticamento pela regra de Split");	
 			trocaInformacoesCab.put("ORDEMCARGA", null);
+			trocaInformacoesCab.put("CODTIPOPER", new BigDecimal("3132"));
+			trocaInformacoesCab.put("DHTIPOPER", getDhTipOper(new BigDecimal("3132")));
 			
 			if (codEmp.intValue() != 5) {
 				trocaInformacoesCab.put("VLRFRETE", BigDecimal.ZERO);
@@ -138,10 +143,14 @@ public class TdbHelper {
 			
 			Map<String, Object> pkNewNuNota = CentralNotasUtils.duplicaRegistro(pedidoVO, "CabecalhoNota", trocaInformacoesCab);
 			nroUnicoNovosPedidos.add((BigDecimal) pkNewNuNota.get("NUNOTA"));
+			nuNotaCodEmp.put(codEmp, (BigDecimal) pkNewNuNota.get("NUNOTA"));
+
 			
 			for (Split pedido : pedidosSplit) {
 				if (pedido.codEmp.intValue() == codEmp.intValue()) {
-					insereItensEmpresa(pkNewNuNota, codEmp, pedido.codProd, pedido.qtdNeg, pedidoVO.asBigDecimal("NUNOTA"));
+					
+					insereItensEmpresa(pkNewNuNota, codEmp, pedido.codProd, pedido.qtdNeg, pedidoVO.asBigDecimal("NUNOTA"));						
+					
 				}
 			}
 		}
@@ -150,8 +159,9 @@ public class TdbHelper {
 		
 		for (BigDecimal nroUnico : nroUnicoNovosPedidos) {
 			recalculaImpostoFinanceiro(nroUnico);
-			
 		}
+		
+		return nuNotaCodEmp;
 		
 	}
 
@@ -205,8 +215,6 @@ public class TdbHelper {
 		JapeWrapper itemDAO = JapeFactory.dao("ItemNota");
 		DynamicVO itemOrigemVO = itemDAO.findOne("NUNOTA = ? AND CODPROD = ?", nuNotaOrig, codProd);
 		
-		System.out.println("[SattvaLog2.2.1] ");
-		
 		JapeWrapper produtoDAO = JapeFactory.dao("Produto");
 		DynamicVO produtoVO = produtoDAO.findOne("CODPROD = ?", codProd);
 		DynamicVO itemVO = (DynamicVO) dwf.getDefaultValueObjectInstance("ItemNota");
@@ -236,7 +244,10 @@ public class TdbHelper {
 		
 	}
 
-	public static BigDecimal transfereSaldo6x1(Collection<Transferencia> itensTransferencia) throws Exception {
+	public static Map<String, BigDecimal> transfereSaldo6x1(Collection<Transferencia> itensTransferencia) throws Exception {
+		
+		Map<String, BigDecimal> notasTransferenca = new HashMap<String, BigDecimal>();
+		
 		EntityFacade dwf = EntityFacadeFactory.getDWFFacade();
 		JapeWrapper produtoDAO = JapeFactory.dao("Produto");
 		JapeWrapper cabecalhoDAO = JapeFactory.dao("CabecalhoNota");
@@ -263,32 +274,70 @@ public class TdbHelper {
 		notaTransferenciaVO.setProperty("NUMNOTA", BigDecimal.ZERO);
 		dwf.createEntity("CabecalhoNota", (EntityVO) notaTransferenciaVO);
 		
-		BigDecimal nuNotaTransf = notaTransferenciaVO.asBigDecimal("NUNOTA");
+		DynamicVO pedidoCompraTransfVO = (DynamicVO) dwf.getDefaultValueObjectInstance("CabecalhoNota");
+		pedidoCompraTransfVO.setProperty("CODEMP", BigDecimal.ONE);
+		pedidoCompraTransfVO.setProperty("CODPARC", new BigDecimal("263436"));
+		pedidoCompraTransfVO.setProperty("OBSERVACAO", "Pedido gerado automaticamente para suprimento de estoque na empresa 1");
+		pedidoCompraTransfVO.setProperty("CODTIPOPER", new BigDecimal("2000"));
+		pedidoCompraTransfVO.setProperty("DHTIPOPER", getDhTipOper(new BigDecimal("2000")));				
+		pedidoCompraTransfVO.setProperty("CODTIPVENDA", cabModeloVO.asBigDecimalOrZero("CODTIPVENDA"));
+		pedidoCompraTransfVO.setProperty("DHTIPVENDA", cabModeloVO.asTimestamp("DHTIPVENDA"));
+		pedidoCompraTransfVO.setProperty("CODNAT", cabModeloVO.asBigDecimalOrZero("CODNAT"));
+		pedidoCompraTransfVO.setProperty("CODCENCUS", cabModeloVO.asBigDecimalOrZero("CODCENCUS"));
+		pedidoCompraTransfVO.setProperty("DTNEG", TimeUtils.getNow());
+		pedidoCompraTransfVO.setProperty("DTENTSAI", TimeUtils.getNow());
+		pedidoCompraTransfVO.setProperty("DTFATUR", TimeUtils.getNow());
+		pedidoCompraTransfVO.setProperty("NUMNOTA", BigDecimal.ZERO);
+		dwf.createEntity("CabecalhoNota", (EntityVO) pedidoCompraTransfVO);
+		
+		BigDecimal nuNotaTransfEntrada = pedidoCompraTransfVO.asBigDecimal("NUNOTA");
+		BigDecimal nuNotaTransfSaida = notaTransferenciaVO.asBigDecimal("NUNOTA");
+		notasTransferenca.put("NUNOTATRANSFENTRADA", nuNotaTransfEntrada);
+		notasTransferenca.put("NUNOTATRANSFSAIDA", nuNotaTransfSaida);
 		
 		for (Transferencia item : itensTransferencia) {
 						
 			BigDecimal custoSemIcms = ComercialUtils.getUltimoCusto(item.codProd, empresaOrigem, codLocal, " ", "CUSSEMICM");
 			
 			DynamicVO produtoVO = produtoDAO.findOne("CODPROD = ?", item.codProd);
-			DynamicVO itemVO = (DynamicVO) dwf.getDefaultValueObjectInstance("ItemNota");
-			itemVO.setProperty("NUNOTA", nuNotaTransf);
-			itemVO.setProperty("CODEMP", empresaOrigem);
-			itemVO.setProperty("CODPROD", item.codProd);
-			itemVO.setProperty("QTDNEG", item.qtdNeg);
-			itemVO.setProperty("VLRUNIT", custoSemIcms);
-			itemVO.setProperty("VLRTOT", custoSemIcms.multiply(item.qtdNeg));
-			itemVO.setProperty("CODVOL", produtoVO.asString("CODVOL"));
-			itemVO.setProperty("ATUALESTOQUE", BigDecimal.ONE);
-			itemVO.setProperty("RESERVA", "S");
-			dwf.createEntity("ItemNota", (EntityVO) itemVO);
+			DynamicVO itemSaidaVO = (DynamicVO) dwf.getDefaultValueObjectInstance("ItemNota");
+			itemSaidaVO.setProperty("NUNOTA", nuNotaTransfSaida);
+			itemSaidaVO.setProperty("CODEMP", empresaOrigem);
+			itemSaidaVO.setProperty("CODPROD", item.codProd);
+			itemSaidaVO.setProperty("QTDNEG", item.qtdNeg);
+			itemSaidaVO.setProperty("VLRUNIT", custoSemIcms);
+			itemSaidaVO.setProperty("VLRTOT", custoSemIcms.multiply(item.qtdNeg));
+			itemSaidaVO.setProperty("CODVOL", produtoVO.asString("CODVOL"));
+			itemSaidaVO.setProperty("ATUALESTOQUE", BigDecimal.ONE);
+			itemSaidaVO.setProperty("RESERVA", "S");
+			dwf.createEntity("ItemNota", (EntityVO) itemSaidaVO);
 			
-			itemVO.clean();
+			DynamicVO itemEntradaVO = (DynamicVO) dwf.getDefaultValueObjectInstance("ItemNota");
+			itemEntradaVO.setProperty("NUNOTA", nuNotaTransfEntrada);
+			itemEntradaVO.setProperty("CODEMP", BigDecimal.ONE);
+			itemEntradaVO.setProperty("CODPROD", item.codProd);
+			itemEntradaVO.setProperty("QTDNEG", item.qtdNeg);
+			itemEntradaVO.setProperty("VLRUNIT", custoSemIcms);
+			itemEntradaVO.setProperty("VLRTOT", custoSemIcms.multiply(item.qtdNeg));
+			itemEntradaVO.setProperty("CODVOL", produtoVO.asString("CODVOL"));
+			itemEntradaVO.setProperty("ATUALESTOQUE", BigDecimal.ZERO);
+			itemEntradaVO.setProperty("RESERVA", "S");
+			dwf.createEntity("ItemNota", (EntityVO) itemEntradaVO);
+			
+			itemSaidaVO.clean();
+			itemEntradaVO.clean();
 			
 		}
 		
-		return nuNotaTransf;
+		return notasTransferenca;
 	}
 	
+
+	public static Timestamp getDhTipOper(BigDecimal codTipOper) throws Exception {
+		JapeWrapper topDAO = JapeFactory.dao("TipoOperacao");
+		DynamicVO topVO = topDAO.findOne("CODTIPOPER = ? AND DHALTER = (SELECT MAX(DHALTER) FROM TGFTOP T WHERE T.CODTIPOPER = TGFTOP.CODTIPOPER)", codTipOper);
+		return topVO.asTimestamp("DHALTER");
+	}
 
 	public static Collection<Split> agrupaSplitPorEmpresa(Collection<Split> quebraPedido) {
 		//Separa itens empresa 1 e itens empresa 5
@@ -301,10 +350,12 @@ public class TdbHelper {
 		Collection<Split> finalSplit = new ArrayList<Split>();
 		
 		for (Split pedido : quebraPedido) {	
-			if (pedido.codEmp.intValue() == 1) {
-				itensEmpresa1.add(pedido);
-			} else {
-				itensEmpresa5.add(pedido);
+			if(pedido.qtdNeg.doubleValue() > 0d) {
+				if (pedido.codEmp.intValue() == 1) {
+					itensEmpresa1.add(pedido);
+				} else {
+					itensEmpresa5.add(pedido);
+				}				
 			}
 		}
 		
