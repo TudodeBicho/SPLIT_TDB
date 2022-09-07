@@ -68,7 +68,9 @@ public class ValidaBaixaEmpresa implements EventoProgramavelJava {
 					}
 					
 					if (empresaMatriz.compareTo(empresaConta) != 0) {
-						throw new Exception("\n<b>A conta utilizada na baixa não pertence à essa empresa. Favor verificar!</b>\n");
+						throw new Exception("\n<b>A conta utilizada na baixa não pertence à essa empresa. Favor verificar!</b>\n"
+								+ "Empresa Matriz: " + empresaMatriz + ", Empresa da Conta: " + empresaConta + ", Conta Baixa: " + contaBaixa +"\n"
+										+ "Nro. Unico: " + finVO.asBigDecimal("NUFIN"));
 					}
 				}
 			}

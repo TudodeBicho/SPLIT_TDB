@@ -133,8 +133,20 @@ public class TdbHelper {
 			} else {
 				
 				String transportadoras = "'CORREIOS'-'CORREIOS PAC'-'CORREIOS SEDEX'";
-				String bhMetodo = transportadoras.indexOf(pedidoVO.asString("BH_METODO")) > -1 ? pedidoVO.asString("BH_METODO") : "JADLOG PACKAGE";
-				BigDecimal codParcTrans = localizaTransportadoraByMetodo(bhMetodo);
+				System.out.println("[Stva1]");
+				String bhMetodo = "";
+				
+				if(pedidoVO.asString("BH_METODO") == null) {
+					
+				} else {
+					bhMetodo = transportadoras.indexOf(pedidoVO.asString("BH_METODO")) > -1 ? pedidoVO.asString("BH_METODO") : "JADLOG PACKAGE";					
+				}
+				
+				System.out.println("[Stva2]");
+				BigDecimal codParcTrans = BigDecimal.ZERO;
+				if(bhMetodo!= null) {
+					codParcTrans = localizaTransportadoraByMetodo(bhMetodo);										
+				}
 				
 				trocaInformacoesCab.put("VLRFRETE", pedidoVO.asBigDecimal("VLRFRETE"));
 				trocaInformacoesCab.put("BH_METODO", bhMetodo);
@@ -166,8 +178,11 @@ public class TdbHelper {
 	}
 
 	private static BigDecimal localizaTransportadoraByMetodo(String bhMetodo) throws Exception {
-		JapeWrapper parceiroDAO = JapeFactory.dao("Parceiro");
+		JapeWrapper parceiroDAO = JapeFactory.dao("Parceiro");		
 		DynamicVO parceiroVO = parceiroDAO.findOne("AD_METODOSDEENVIO = ?", bhMetodo);
+		if (parceiroVO == null) {
+			return BigDecimal.ZERO;
+		}
 		return parceiroVO.asBigDecimal("CODPARC");
 	}
 
@@ -429,4 +444,222 @@ public class TdbHelper {
         // return the new list
         return newList;
     }
+	
+	public BigDecimal verificaSaldoEstoqueAgrupando(BigDecimal codEmp, BigDecimal codProd) throws Exception {
+		EntityFacade dwf = EntityFacadeFactory.getDWFFacade();
+		NativeSql sqlEstoqueDisponivel = new NativeSql(dwf.getJdbcWrapper());
+		sqlEstoqueDisponivel.loadSql(getClass(), "qryEstoqueDisponivel.sql");
+		sqlEstoqueDisponivel.setNamedParameter("CODEMP", codEmp);
+		sqlEstoqueDisponivel.setNamedParameter("CODPROD", codProd);
+		
+		ResultSet rs = sqlEstoqueDisponivel.executeQuery();
+		if (rs.next()) {
+			return rs.getBigDecimal(1);
+		} else {
+			return BigDecimal.ZERO;
+		}
+	}
+
+	public String verificaDisponibilidade156(Collection<DynamicVO> itensPedido, String log, BigDecimal nuNotaOrig, Collection<Split> splitPedidos, boolean geraTransferencia, Collection<Transferencia> itensTransferencia) throws Exception {
+		
+		JapeWrapper produtoDAO = JapeFactory.dao("Produto");
+		JapeWrapper logDAO = JapeFactory.dao("AD_LOGSPLIT");
+		
+		final BigDecimal empresa1 = new BigDecimal("1"); // TDB
+		final BigDecimal empresa5 = new BigDecimal("5"); // Extrema
+		final BigDecimal empresa6 = new BigDecimal("6"); // Loja
+		
+		for (DynamicVO itemPedidoVO : itensPedido) {
+    		BigDecimal codProd = itemPedidoVO.asBigDecimal("CODPROD");
+    		BigDecimal qtdNeg = itemPedidoVO.asBigDecimal("QTDNEG");
+    		BigDecimal saldo = qtdNeg;
+    		String nomeProduto = itemPedidoVO.asString("Produto.DESCRPROD");
+    		
+    		DynamicVO produtoVO = produtoDAO.findOne("CODPROD = ?", codProd);
+    		if("D".equals(produtoVO.asString("USOPROD"))) {
+    			continue;
+    		}
+    		
+    		BigDecimal estDisponivelEmp1 = verificaSaldoEstoqueAgrupando(empresa1, codProd);
+    		BigDecimal estDisponivelEmp5 = verificaSaldoEstoqueAgrupando(empresa5, codProd);
+    		BigDecimal estDisponivelEmp6 = verificaSaldoEstoqueAgrupando(empresa6, codProd);
+    		
+    		if (estDisponivelEmp1.doubleValue() == 0 && estDisponivelEmp5.doubleValue() == 0 && estDisponivelEmp6.doubleValue() == 0) {
+    			log += "Não possui estoque disponivel em nenhuma empresa para o produto " +codProd +"-"+nomeProduto+ ". Cancelando Split.";
+    			logDAO.create()
+            	.set("DESCRICAO", log.toCharArray())
+            	.set("NUNOTAORIG", nuNotaOrig)
+            	.set("DHINCLUSAO", TimeUtils.getNow())
+            	.save();
+    			return log;
+    		}
+    		
+    		log += "QtdNeg: " + qtdNeg 
+    				+ ", estoqueDisponivelEmp5: " + estDisponivelEmp5 
+    				+ ", estoqueDisponivelEmp1: " + estDisponivelEmp1
+    				+ ", estoqueDisponivelEmp6: " + estDisponivelEmp6;
+    		
+    		boolean temDisponivelEmp1 = 
+    				estDisponivelEmp1.doubleValue() > 0 
+    				&& saldo.doubleValue() <= estDisponivelEmp1.doubleValue()
+    				&& saldo.doubleValue() > 0;
+    		
+    		if (temDisponivelEmp1) {
+    			
+    			log += "\nTEM disponibilidade total empresa 1";
+    			
+    			Split quebraEmp1 = new Split(new BigDecimal("1"), codProd, saldo);
+    			splitPedidos.add(quebraEmp1);
+    			
+    		} else {
+    			
+    			Split quebraEmp1 = new Split(new BigDecimal("1"), codProd, estDisponivelEmp1);
+    			splitPedidos.add(quebraEmp1);
+    			
+    			saldo = qtdNeg.subtract(estDisponivelEmp1);
+    			
+    			log += "\nNÃO TEM disponibilidade total empresa 1" + ", Saldo remanescente: " + saldo;
+    			
+    			boolean temDisponivelEmp5 = 
+    					saldo.doubleValue() > 0 
+    					&& estDisponivelEmp5.doubleValue() > 0 
+    					&& saldo.doubleValue() <= estDisponivelEmp5.doubleValue()
+    					&& saldo.doubleValue() > 0;
+    										
+    			if (temDisponivelEmp5) {
+    				log += "\nTEM disponibilidade total empresa 5";
+    				
+    				Split quebraEmp5 = new Split(new BigDecimal("5"), codProd, saldo);
+        			splitPedidos.add(quebraEmp1);
+        			
+    			} else {
+    				
+    				Split quebraEmp5 = new Split(new BigDecimal("5"), codProd, estDisponivelEmp5);
+        			splitPedidos.add(quebraEmp5);
+        			
+        			saldo = saldo.subtract(estDisponivelEmp5);
+        			
+        			log += "\nNÃO TEM disponibilidade total empresa 5" + ", Saldo remanescente: " + saldo;
+        			
+        			if (saldo.doubleValue() <= estDisponivelEmp6.doubleValue() && saldo.doubleValue() > 0) {
+        				geraTransferencia = true;
+        				log += "\nTEM disponibilidade total para transferencia da empresa 6 p/ 1";
+        				log += "\nTransferindo quantidade necessária empresa 6 para 1: Quantidade" + saldo;
+
+        				itensTransferencia.add(new Transferencia(codProd, saldo));
+        				
+        				Split quebraEmp6 = new Split(new BigDecimal("1"), codProd, saldo);
+            			splitPedidos.add(quebraEmp6);
+            			
+        			} else {
+        				log += "\nNão é possivel fazer o split pois não tem estoque suficiente em todo o grupo";
+        				TdbHelper.registraLogSplit("Não é possivel fazer o split pois não tem estoque suficiente em todo o grupo");
+        			}
+    			}
+    		}
+    	}
+		
+		return log;
+	}
+
+	public String verificaDisponibilidade516(Collection<DynamicVO> itensPedido, String log, BigDecimal nuNotaOrig, Collection<Split> splitPedidos, boolean geraTransferencia, Collection<Transferencia> itensTransferencia) throws Exception {
+		
+		JapeWrapper produtoDAO = JapeFactory.dao("Produto");
+		JapeWrapper logDAO = JapeFactory.dao("AD_LOGSPLIT");
+		
+		final BigDecimal empresa5 = new BigDecimal("5"); // Extrema
+		final BigDecimal empresa1 = new BigDecimal("1"); // TDB
+		final BigDecimal empresa6 = new BigDecimal("6"); // Loja
+		
+		for (DynamicVO itemPedidoVO : itensPedido) {
+    		BigDecimal codProd = itemPedidoVO.asBigDecimal("CODPROD");
+    		BigDecimal qtdNeg = itemPedidoVO.asBigDecimal("QTDNEG");
+    		BigDecimal saldo = qtdNeg;
+    		String nomeProduto = itemPedidoVO.asString("Produto.DESCRPROD");
+    		
+    		DynamicVO produtoVO = produtoDAO.findOne("CODPROD = ?", codProd);
+    		if("D".equals(produtoVO.asString("USOPROD"))) {
+    			continue;
+    		}
+    		
+    		BigDecimal estDisponivelEmp5 = verificaSaldoEstoqueAgrupando(empresa5, codProd);
+    		BigDecimal estDisponivelEmp1 = verificaSaldoEstoqueAgrupando(empresa1, codProd);
+    		BigDecimal estDisponivelEmp6 = verificaSaldoEstoqueAgrupando(empresa6, codProd);
+    		
+    		if (estDisponivelEmp5.doubleValue() == 0 && estDisponivelEmp1.doubleValue() == 0 && estDisponivelEmp6.doubleValue() == 0) {
+    			log += "Não possui estoque disponivel em nenhuma empresa para o produto " +codProd +"-"+nomeProduto+ ". Cancelando Split.";
+    			logDAO.create()
+            	.set("DESCRICAO", log.toCharArray())
+            	.set("NUNOTAORIG", nuNotaOrig)
+            	.set("DHINCLUSAO", TimeUtils.getNow())
+            	.save();
+    			return log;
+    		}
+    		
+    		log += "QtdNeg: " + qtdNeg 
+    				+ ", estoqueDisponivelEmp5: " + estDisponivelEmp5 
+    				+ ", estoqueDisponivelEmp1: " + estDisponivelEmp1
+    				+ ", estoqueDisponivelEmp6: " + estDisponivelEmp6;
+    		
+    		boolean temDisponivelEmp5 = 
+    				estDisponivelEmp5.doubleValue() > 0 
+    				&& saldo.doubleValue() <= estDisponivelEmp5.doubleValue()
+    				&& saldo.doubleValue() > 0;
+    		
+    		if (temDisponivelEmp5) {
+    			
+    			log += "\nTEM disponibilidade total empresa 5";
+    			
+    			Split quebraEmp5 = new Split(new BigDecimal("5"), codProd, saldo);
+    			splitPedidos.add(quebraEmp5);
+    			
+    		} else {
+    			
+    			Split quebraEmp5 = new Split(new BigDecimal("5"), codProd, estDisponivelEmp5);
+    			splitPedidos.add(quebraEmp5);
+    			
+    			saldo = qtdNeg.subtract(estDisponivelEmp5);
+    			
+    			log += "\nNÃO TEM disponibilidade total empresa 5" + ", Saldo remanescente: " + saldo;
+    			
+    			boolean temDisponivelEmp1 = 
+    					saldo.doubleValue() > 0 
+    					&& estDisponivelEmp1.doubleValue() > 0 
+    					&& saldo.doubleValue() <= estDisponivelEmp1.doubleValue()
+    					&& saldo.doubleValue() > 0;
+    										
+    			if (temDisponivelEmp1) {
+    				log += "\nTEM disponibilidade total empresa 1";
+    				
+    				Split quebraEmp1 = new Split(new BigDecimal("1"), codProd, saldo);
+        			splitPedidos.add(quebraEmp1);
+        			
+    			} else {
+    				
+    				Split quebraEmp1 = new Split(new BigDecimal("1"), codProd, estDisponivelEmp1);
+        			splitPedidos.add(quebraEmp1);
+        			
+        			saldo = saldo.subtract(estDisponivelEmp1);
+        			
+        			log += "\nNÃO TEM disponibilidade total empresa 1" + ", Saldo remanescente: " + saldo;
+        			
+        			if (saldo.doubleValue() <= estDisponivelEmp6.doubleValue() && saldo.doubleValue() > 0) {
+        				geraTransferencia = true;
+        				log += "\nTEM disponibilidade total para transferencia da empresa 6 p/ 1";
+        				log += "\nTransferindo quantidade necessária empresa 6 para 1: Quantidade" + saldo;
+
+        				itensTransferencia.add(new Transferencia(codProd, saldo));
+        				
+        				Split quebraEmp6 = new Split(new BigDecimal("1"), codProd, saldo);
+            			splitPedidos.add(quebraEmp6);
+            			
+        			} else {
+        				log += "\nNão é possivel fazer o split pois não tem estoque suficiente em todo o grupo";
+        				TdbHelper.registraLogSplit("Não é possivel fazer o split pois não tem estoque suficiente em todo o grupo");
+        			}
+    			}
+    		}
+    	}
+	return log;
+	}
 }
