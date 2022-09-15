@@ -122,14 +122,12 @@ public class TdbHelper {
 			Map<String, Object> trocaInformacoesCab = new HashMap<>();
 			trocaInformacoesCab.put("CODEMP", codEmp);
 			trocaInformacoesCab.put("CODEMPNEGOC", codEmp);
-//			trocaInformacoesCab.put("OBSERVACAO", "Pedido gerado automaticamento pela regra de Split");	
 			trocaInformacoesCab.put("ORDEMCARGA", null);
 			trocaInformacoesCab.put("CODTIPOPER", new BigDecimal("3132"));
 			trocaInformacoesCab.put("DHTIPOPER", getDhTipOper(new BigDecimal("3132")));
 			
 			if (codEmp.intValue() != 5) {
 				trocaInformacoesCab.put("VLRFRETE", BigDecimal.ZERO);
-				
 			} else {
 				
 				String transportadoras = "'CORREIOS'-'CORREIOS PAC'-'CORREIOS SEDEX'";
@@ -359,8 +357,8 @@ public class TdbHelper {
 		Collection<Split> itensEmpresa1 = new ArrayList<Split>();
 		Collection<Split> itensEmpresa5 = new ArrayList<Split>();
 		Collection<Split> itensEmpresa1Agrupado = new ArrayList<Split>();
-		Collection<Split> itensEmpresa1Agrupado2 = new ArrayList<Split>();
 		Collection<Split> itensEmpresa5Agrupado = new ArrayList<Split>();
+		Collection<Split> itensEmpresa1Agrupado2 = new ArrayList<Split>();
 		Collection<Split> itensEmpresa5Agrupado2 = new ArrayList<Split>();
 		Collection<Split> finalSplit = new ArrayList<Split>();
 		

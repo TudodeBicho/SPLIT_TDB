@@ -79,6 +79,7 @@ public class SplitPedidosAcaoII implements AcaoRotinaJava {
 						log += "\nNroUnico Pre Split: " + nuNotaPreSplit;
 						log += "\nQuantidade de Itens: " + itensPreSplit.size();
 						log += "\nCidade de Destino:" + codCidadeDestino + "-" + nomeCidadeDestino;
+						System.out.println("[Sattva] - Chegou aqui...");
 						
 						doSplit(regraPrioridade, itensPreSplit, nuNotaPreSplit, itensTransferencia, splitPedidos);
 						
@@ -162,12 +163,12 @@ public class SplitPedidosAcaoII implements AcaoRotinaJava {
 			    		}
 			    		
 			    		if (regraPrioridade.equals("516")) {
-			    			log += "\nProduto: " + codProd + ", QtdNeg: " + qtdNeg 
+			    			log += "\n\nProduto: " + codProd + ", QtdNeg: " + qtdNeg 
 				    				+ "\nDisponibilidade(5): " + estDisponivelEmp5 
 				    				+ ", Disponibilidade(1): " + estDisponivelEmp1
 				    				+ ", Disponibilidade(6): " + estDisponivelEmp6;
 			    		} else {
-			    			log += "\nProduto: " + codProd + ", QtdNeg: " + qtdNeg 
+			    			log += "\n\nProduto: " + codProd + ", QtdNeg: " + qtdNeg 
 				    				+ "\nDisponibilidade(1): " + estDisponivelEmp1
 				    				+ ", Disponibilidade(6): " + estDisponivelEmp6
 				    				+ ", Disponibilidade(5): " + estDisponivelEmp5;
@@ -242,11 +243,13 @@ public class SplitPedidosAcaoII implements AcaoRotinaJava {
 					}
 				}
 			});
+		}
 
-		} catch (Exception e) {
-			System.out.println("[SattvaError: " + e.toString());
-			arg0.setMensagemRetorno("Erro: " + e.toString());
-		} finally {
+//		 catch (Exception e) {
+//			System.out.println("[SattvaError: " + e.toString());
+//			arg0.setMensagemRetorno("Erro: " + e.toString());
+//		} 
+			finally {
 			JapeSession.close(hnd);
 		}
 		arg0.setMensagemRetorno("Opa!");
