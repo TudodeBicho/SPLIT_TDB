@@ -4,6 +4,7 @@ import java.math.BigDecimal;
 import java.sql.ResultSet;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.Map;
 
 import com.sankhya.util.TimeUtils;
@@ -48,9 +49,12 @@ public class SplitPedidosAcaoII implements AcaoRotinaJava {
 			hnd = JapeSession.open();
 			hnd.execWithTX(new JapeSession.TXBlock() {
 				public void doWithTx() throws Exception {
+					
+					BigDecimal topPreSplit = TdbHelper.buscaTopPreSplit();
 
 					String filtroPedidosAptos = "PENDENTE = 'S' " + "AND CODVEND = 14 "
-							+ "/*AND CODCIDDESTINO NOT IN (4798, 2475)*/ " + "AND CODTIPOPER = 3102 "
+//							+ "/*AND CODCIDDESTINO NOT IN (4798, 2475)*/ " + "AND CODTIPOPER = 3102 "
+							+ "/*AND CODCIDDESTINO NOT IN (4798, 2475)*/ " + "AND CODTIPOPER = " + topPreSplit
 							+ "AND NOT EXISTS (SELECT 1 FROM TGFVAR V WHERE TGFCAB.NUNOTA = V.NUNOTAORIG) "
 							+ "AND DTNEG >= '02/02/2022' AND CODEMP = 1";
 
@@ -66,6 +70,24 @@ public class SplitPedidosAcaoII implements AcaoRotinaJava {
 						String nomeCidadeDestino = buscaCidadeDestino(codCidadeDestino);
 						Collection<Transferencia> itensTransferencia = new ArrayList<Transferencia>();
 						Collection<Split> splitPedidos = new ArrayList<Split>();
+						
+						boolean pedidoJaFaturado = verificaPedidoFaturado(nuNotaPreSplit);
+						
+						if (pedidoJaFaturado) {
+							log = "Esse pedido ja foi faturado. Verificar documentos relacionados";
+							statusProcessamento = "E";
+							logDAO.create()
+				        	.set("DESCRICAO", log.toCharArray())
+				        	.set("NUNOTAORIG", pedidoVO.asBigDecimal("NUNOTA"))
+				        	.set("DHINCLUSAO", TimeUtils.getNow())
+				        	.set("STATUSPROCESSAMENTO", statusProcessamento)
+				        	.save();
+							
+							continue;
+							
+						}
+						
+						System.out.println("[Sattva] - Nro Unico do Pre Split: " + nuNotaPreSplit);
 
 						if (codCidadeDestino != null && "4798-2475".indexOf(codCidadeDestino.toString()) > -1) {
 							log += "Regra Prioridade: Empresa 1, Empresa 6 e Empresa 5";
@@ -81,13 +103,21 @@ public class SplitPedidosAcaoII implements AcaoRotinaJava {
 						log += "\nCidade de Destino:" + codCidadeDestino + "-" + nomeCidadeDestino;
 						System.out.println("[Sattva] - Chegou aqui...");
 						
+						System.out.println("Antes");
 						doSplit(regraPrioridade, itensPreSplit, nuNotaPreSplit, itensTransferencia, splitPedidos);
+						System.out.println("Depois do doSplit");
 						
 						if(geraTransferencia) {
-                    		try {
-                    			Map<String, BigDecimal> nroUnicoTransf = TdbHelper.transfereSaldo6x1(itensTransferencia);
-                    			log += "\nNro.Unico.Transferencia Saida..: " + nroUnicoTransf.get("NUNOTATRANSFSAIDA");
-                        		log += "\nNro.Unico.Transferencia Entrada: " + nroUnicoTransf.get("NUNOTATRANSFENTRADA");
+                    		try { 
+                    			Map<String, BigDecimal> nroUnicoTransf = TdbHelper.transfereSaldo6x1(itensTransferencia, nuNotaPreSplit);
+                    			log += "\n\nNro.Unico.Transferencia Saida..: " + nroUnicoTransf.get("NUNOTATRANSFSAIDA");
+                        		log += "\nNro.Unico.Transferencia Entrada: " + nroUnicoTransf.get("NUNOTATRANSFENTRADA")+"\n";
+                        		
+                        		System.out.println("[Sattva] - Recalculando transferencia");
+                        		TdbHelper.recalculaImpostoEFinanceiro(nroUnicoTransf.get("NUNOTATRANSFSAIDA"));
+                        		TdbHelper.recalculaImpostoEFinanceiro(nroUnicoTransf.get("NUNOTATRANSFENTRADA"));
+                        		System.out.println("[Sattva] - Fim - Recalculando transferencia");
+                        		
 							} catch (Exception e) {
 								statusProcessamento = "E";
 								msgStatus = e.toString();
@@ -102,17 +132,28 @@ public class SplitPedidosAcaoII implements AcaoRotinaJava {
 							}
                     	}
 						
+						System.out.println("Depois da transferencia");
 						Collection<Split> pedidosSplit = TdbHelper.agrupaSplitPorEmpresa(splitPedidos);
-                    	Map<BigDecimal, BigDecimal> listaNroUnicoEmpresa = TdbHelper.geraLancamentosSplit(pedidoVO, pedidosSplit);
-                    	
+						
+						Map<BigDecimal, BigDecimal> listaNroUnicoEmpresa = new HashMap<BigDecimal, BigDecimal>();
+						
+						System.out.println("GeraLancamentosSplit");
+						listaNroUnicoEmpresa = TdbHelper.geraLancamentosSplit(pedidoVO, pedidosSplit);							
+						System.out.println("[Sattva] - Realizou geraLancamentosSplit");
+						
                     	imprimeSplitFinal(pedidosSplit, listaNroUnicoEmpresa);
+                    	System.out.println("[Sattva] - imprimiuSplitFinal");
                     	
+                    	BigDecimal topPosSplit = TdbHelper.buscaTopPosSplit();
+                    	
+                    	System.out.println("[Sattva] - Atualizando top pedido origem");
                     	cabecalhoDAO.prepareToUpdate(pedidoVO)
-                    	.set("CODTIPOPER", new BigDecimal("3131"))
-                    	.set("DHTIPOPER", TdbHelper.getDhTipOper(new BigDecimal("3131")))
+                    	.set("CODTIPOPER", topPosSplit)
+                    	.set("DHTIPOPER", TdbHelper.getDhTipOper(topPosSplit))
                     	.update();
+                    	System.out.println("[Sattva] - Fim Atualização");
                     	
-                    	CentralNotasUtils.confirmarNota(pedidoVO.asBigDecimal("NUNOTA"));
+//                    	CentralNotasUtils.confirmarNota(pedidoVO.asBigDecimal("NUNOTA"));
 		
 						logDAO.create()
 			        	.set("DESCRICAO", log.toCharArray())
@@ -126,9 +167,21 @@ public class SplitPedidosAcaoII implements AcaoRotinaJava {
 
 				}
 
-				private void imprimeSplitFinal(Collection<Split> pedidosSplit, Map<BigDecimal, BigDecimal> listaNroUnicoEmpresa) {
+				private boolean verificaPedidoFaturado(BigDecimal nuNotaPreSplit) throws Exception {
+					JapeWrapper tgfvarDAO = JapeFactory.dao("CompraVendavariosPedido");
+					DynamicVO tgfvarVO = tgfvarDAO.findOne("NUNOTAORIG = ?", nuNotaPreSplit);
+					
+					if (tgfvarVO == null) {
+						return false;
+					}
+					
+					return true;
+				}
+
+				private void imprimeSplitFinal(Collection<Split> pedidosSplit, Map<BigDecimal, BigDecimal> listaNroUnicoEmpresa) throws Exception {
 					for (Split pedido : pedidosSplit) {
 						for (Map.Entry<BigDecimal, BigDecimal> nuNotaEmp : listaNroUnicoEmpresa.entrySet()) {
+							
 							if (nuNotaEmp.getKey().intValue() == 1 && pedido.codEmp.intValue() == 1) {
 								log += "\n" + "[NUNOTA: " + nuNotaEmp.getValue() + "] " + pedido.toString();
 							}
@@ -223,10 +276,10 @@ public class SplitPedidosAcaoII implements AcaoRotinaJava {
 					return saldo.subtract(estDisponivel);
 				}
 
-				private Object disponibilidaDeAtendimento(BigDecimal saldo, BigDecimal estDisponivelEmp1) {
-					// TODO Auto-generated method stub
-					return null;
-				}
+//				private Object disponibilidaDeAtendimento(BigDecimal saldo, BigDecimal estDisponivelEmp1) {
+//					// TODO Auto-generated method stub
+//					return null;
+//				}
 
 				private BigDecimal verificaSaldoEstoqueAgrupando(BigDecimal codEmp, BigDecimal codProd) throws Exception {
 					EntityFacade dwf = EntityFacadeFactory.getDWFFacade();
@@ -245,10 +298,10 @@ public class SplitPedidosAcaoII implements AcaoRotinaJava {
 			});
 		}
 
-//		 catch (Exception e) {
-//			System.out.println("[SattvaError: " + e.toString());
-//			arg0.setMensagemRetorno("Erro: " + e.toString());
-//		} 
+		 catch (Exception e) {
+			System.out.println("[SattvaError: " + e.toString());
+			arg0.setMensagemRetorno("Erro: " + e.toString());
+		} 
 			finally {
 			JapeSession.close(hnd);
 		}

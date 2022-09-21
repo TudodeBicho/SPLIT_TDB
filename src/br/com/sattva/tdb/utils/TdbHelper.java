@@ -11,19 +11,25 @@ import java.util.Map;
 import com.sankhya.util.TimeUtils;
 
 import br.com.sankhya.jape.EntityFacade;
+import br.com.sankhya.jape.bmp.PersistentLocalEntity;
 import br.com.sankhya.jape.sql.NativeSql;
+import br.com.sankhya.jape.util.FinderWrapper;
+import br.com.sankhya.jape.util.JapeSessionContext;
 import br.com.sankhya.jape.vo.DynamicVO;
 import br.com.sankhya.jape.vo.EntityVO;
 import br.com.sankhya.jape.wrapper.JapeFactory;
 import br.com.sankhya.jape.wrapper.JapeWrapper;
+import br.com.sankhya.modelcore.auth.AuthenticationInfo;
 import br.com.sankhya.modelcore.comercial.CentralFinanceiro;
 import br.com.sankhya.modelcore.comercial.ComercialUtils;
 import br.com.sankhya.modelcore.comercial.PrecoCustoHelper;
 import br.com.sankhya.modelcore.comercial.impostos.ImpostosHelpper;
 import br.com.sankhya.modelcore.helper.CalculoPrecosCustosHelper;
+import br.com.sankhya.modelcore.util.DynamicEntityNames;
 import br.com.sankhya.modelcore.util.EntityFacadeFactory;
 import br.com.sankhya.modelcore.util.MGEComercialUtil;
 import br.com.sankhya.modelcore.util.MGECoreParameter;
+import br.com.sankhya.ws.ServiceContext;
 import br.com.sattva.tdb.job.Split;
 import br.com.sattva.tdb.job.Transferencia;
 
@@ -105,11 +111,50 @@ public class TdbHelper {
 		}
 		return BigDecimal.ZERO;
 	}
-
+	
+	private static BigDecimal buscaNunotaModeloEntrada() throws Exception {
+		EntityFacade dwf = EntityFacadeFactory.getDWFFacade();
+		NativeSql qryVerificaParametro = new NativeSql(dwf.getJdbcWrapper());
+		
+		String selectParametro = "SELECT INTEIRO FROM TSIPAR WHERE CHAVE = 'TOPCOMPRALOJA'";		
+		ResultSet rs = qryVerificaParametro.executeQuery(selectParametro);
+		
+		if (rs.next()) {
+			return rs.getBigDecimal("INTEIRO");		
+		}
+		return BigDecimal.ZERO;
+	}
+	
+	public static BigDecimal buscaTopPreSplit() throws Exception {
+		EntityFacade dwf = EntityFacadeFactory.getDWFFacade();
+		NativeSql qryVerificaParametro = new NativeSql(dwf.getJdbcWrapper());
+		
+		String selectParametro = "SELECT INTEIRO FROM TSIPAR WHERE CHAVE = 'TOPPRESPLIT'";		
+		ResultSet rs = qryVerificaParametro.executeQuery(selectParametro);
+		
+		if (rs.next()) {
+			return rs.getBigDecimal("INTEIRO");		
+		}
+		return BigDecimal.ZERO;
+	}
+	
+	public static BigDecimal buscaTopPosSplit() throws Exception {
+		EntityFacade dwf = EntityFacadeFactory.getDWFFacade();
+		NativeSql qryVerificaParametro = new NativeSql(dwf.getJdbcWrapper());
+		
+		String selectParametro = "SELECT INTEIRO FROM TSIPAR WHERE CHAVE = 'TOPPOSSPLIT'";		
+		ResultSet rs = qryVerificaParametro.executeQuery(selectParametro);
+		
+		if (rs.next()) {
+			return rs.getBigDecimal("INTEIRO");		
+		}
+		return BigDecimal.ZERO;
+	}
+	
 	public static void registraLogSplit(String string) {
 		// TODO Auto-generated method stub
 	}
-
+	
 	public static Map<BigDecimal, BigDecimal> geraLancamentosSplit(DynamicVO pedidoVO, Collection<Split> pedidosSplit) throws Exception {
 
 		ArrayList<BigDecimal> nroUnicoNovosPedidos = new ArrayList<BigDecimal>();
@@ -123,8 +168,8 @@ public class TdbHelper {
 			trocaInformacoesCab.put("CODEMP", codEmp);
 			trocaInformacoesCab.put("CODEMPNEGOC", codEmp);
 			trocaInformacoesCab.put("ORDEMCARGA", null);
-			trocaInformacoesCab.put("CODTIPOPER", new BigDecimal("3132"));
-			trocaInformacoesCab.put("DHTIPOPER", getDhTipOper(new BigDecimal("3132")));
+			trocaInformacoesCab.put("CODTIPOPER", buscaTopPosSplit());
+			trocaInformacoesCab.put("DHTIPOPER", getDhTipOper(buscaTopPosSplit()));
 			
 			if (codEmp.intValue() != 5) {
 				trocaInformacoesCab.put("VLRFRETE", BigDecimal.ZERO);
@@ -158,7 +203,7 @@ public class TdbHelper {
 			
 			for (Split pedido : pedidosSplit) {
 				if (pedido.codEmp.intValue() == codEmp.intValue()) {
-					
+					System.out.println("Inserindo itens split");
 					insereItensEmpresa(pkNewNuNota, codEmp, pedido.codProd, pedido.qtdNeg, pedidoVO.asBigDecimal("NUNOTA"));						
 					
 				}
@@ -166,15 +211,18 @@ public class TdbHelper {
 		}
 		
 		vinculaTgfvar(nroUnicoNovosPedidos, pedidoVO.asBigDecimal("NUNOTA"));
+		System.out.println("[Sattva] - Vinculou TGFVAR");
 		
 		for (BigDecimal nroUnico : nroUnicoNovosPedidos) {
-			recalculaImpostoFinanceiro(nroUnico);
+			System.out.println("[Sattva] - Recalculando imposto e financeiro");
+			recalculaImpostoEFinanceiro(nroUnico);
+			System.out.println("[Sattva] - Recalculo finalizado");
 		}
 		
 		return nuNotaCodEmp;
 		
 	}
-
+	
 	private static BigDecimal localizaTransportadoraByMetodo(String bhMetodo) throws Exception {
 		JapeWrapper parceiroDAO = JapeFactory.dao("Parceiro");		
 		DynamicVO parceiroVO = parceiroDAO.findOne("AD_METODOSDEENVIO = ?", bhMetodo);
@@ -184,7 +232,7 @@ public class TdbHelper {
 		return parceiroVO.asBigDecimal("CODPARC");
 	}
 
-	private static void recalculaImpostoFinanceiro(BigDecimal nroUnico) throws Exception {
+	public static void recalculaImpostoEFinanceiro(BigDecimal nroUnico) throws Exception {
 		ImpostosHelpper ih = new ImpostosHelpper();
 		ih.setForcarRecalculo(true);
 		ih.calcularImpostos(nroUnico);
@@ -207,14 +255,25 @@ public class TdbHelper {
 			for (DynamicVO itemNewVO : itensNewVO) {
 				
 				DynamicVO itemOldVO = itemDAO.findOne("NUNOTA = ? AND CODPROD = ?", nuNotaOriginal, itemNewVO.asBigDecimal("CODPROD"));
-				
-				tgfvarDAO.create()
-				.set("NUNOTA", nroUnico)
-				.set("SEQUENCIA", itemNewVO.asBigDecimal("SEQUENCIA"))
-				.set("NUNOTAORIG", itemOldVO.asBigDecimal("NUNOTA"))
-				.set("SEQUENCIAORIG", itemOldVO.asBigDecimal("SEQUENCIA"))
-				.set("QTDATENDIDA", itemNewVO.asBigDecimal("QTDNEG"))
-				.save();
+
+				try {
+					tgfvarDAO.create()
+					.set("NUNOTA", nroUnico)
+					.set("SEQUENCIA", itemNewVO.asBigDecimal("SEQUENCIA"))
+					.set("NUNOTAORIG", itemOldVO.asBigDecimal("NUNOTA"))
+					.set("SEQUENCIAORIG", itemOldVO.asBigDecimal("SEQUENCIA"))
+					.set("QTDATENDIDA", itemNewVO.asBigDecimal("QTDNEG"))
+					.save();
+					
+				} catch (Exception e) {
+					JapeWrapper logDAO = JapeFactory.dao("AD_LOGSPLIT");
+					logDAO.create()
+		        	.set("DESCRICAO", "Pedido ja foi faturado... " + e.toString())
+		        	.set("NUNOTAORIG", itemOldVO.asBigDecimal("NUNOTA"))
+		        	.set("DHINCLUSAO", TimeUtils.getNow())
+		        	.set("STATUSPROCESSAMENTO", "E")
+		        	.save();
+				}
 				
 			}
 			
@@ -243,6 +302,8 @@ public class TdbHelper {
 		itemVO.setProperty("RESERVA", "S");
 		dwf.createEntity("ItemNota", (EntityVO) itemVO);
 		
+		System.out.println("Item: " + codProd + " inserido");
+		
 	}
 
 	private static Collection<? extends BigDecimal> separaEmpresasCabecalho(Collection<Split> pedidosSplit) {
@@ -256,8 +317,8 @@ public class TdbHelper {
 		
 		
 	}
-
-	public static Map<String, BigDecimal> transfereSaldo6x1(Collection<Transferencia> itensTransferencia) throws Exception {
+	
+public static Map<String, BigDecimal> transfereSaldo6x1(Collection<Transferencia> itensTransferencia, BigDecimal nuNotaOrig) throws Exception {
 		
 		Map<String, BigDecimal> notasTransferenca = new HashMap<String, BigDecimal>();
 		
@@ -269,38 +330,45 @@ public class TdbHelper {
 		validaParametros();
 
 		BigDecimal nuNotaModeloSaida = buscaNunotaModeloSaida();
-		DynamicVO cabModeloVO = cabecalhoDAO.findOne("NUNOTA = ?", nuNotaModeloSaida);
+		DynamicVO cabModeloSaidaVO = cabecalhoDAO.findOne("NUNOTA = ?", nuNotaModeloSaida);
 		
 		DynamicVO notaTransferenciaVO = (DynamicVO) dwf.getDefaultValueObjectInstance("CabecalhoNota");
-		notaTransferenciaVO.setProperty("CODEMP", cabModeloVO.asBigDecimalOrZero("CODEMP"));
-		notaTransferenciaVO.setProperty("CODPARC", cabModeloVO.asBigDecimalOrZero("CODPARC"));
+		notaTransferenciaVO.setProperty("CODEMP", cabModeloSaidaVO.asBigDecimalOrZero("CODEMP"));
+		notaTransferenciaVO.setProperty("CODPARC", cabModeloSaidaVO.asBigDecimalOrZero("CODPARC"));
 		notaTransferenciaVO.setProperty("OBSERVACAO", "Pedido gerado automaticamente para suprimento de estoque na empresa 1");
-		notaTransferenciaVO.setProperty("CODTIPOPER", cabModeloVO.asBigDecimalOrZero("CODTIPOPER"));
-		notaTransferenciaVO.setProperty("DHTIPOPER", cabModeloVO.asTimestamp("DHTIPOPER"));				
-		notaTransferenciaVO.setProperty("CODTIPVENDA", cabModeloVO.asBigDecimalOrZero("CODTIPVENDA"));
-		notaTransferenciaVO.setProperty("DHTIPVENDA", cabModeloVO.asTimestamp("DHTIPVENDA"));
-		notaTransferenciaVO.setProperty("CODNAT", cabModeloVO.asBigDecimalOrZero("CODNAT"));
-		notaTransferenciaVO.setProperty("CODCENCUS", cabModeloVO.asBigDecimalOrZero("CODCENCUS"));
+		notaTransferenciaVO.setProperty("CODTIPOPER", cabModeloSaidaVO.asBigDecimalOrZero("CODTIPOPER"));
+		notaTransferenciaVO.setProperty("DHTIPOPER", cabModeloSaidaVO.asTimestamp("DHTIPOPER"));				
+		notaTransferenciaVO.setProperty("CODTIPVENDA", cabModeloSaidaVO.asBigDecimalOrZero("CODTIPVENDA"));
+		notaTransferenciaVO.setProperty("DHTIPVENDA", cabModeloSaidaVO.asTimestamp("DHTIPVENDA"));
+		notaTransferenciaVO.setProperty("CODNAT", cabModeloSaidaVO.asBigDecimalOrZero("CODNAT"));
+		notaTransferenciaVO.setProperty("CODCENCUS", cabModeloSaidaVO.asBigDecimalOrZero("CODCENCUS"));
 		notaTransferenciaVO.setProperty("DTNEG", TimeUtils.getNow());
 		notaTransferenciaVO.setProperty("DTENTSAI", TimeUtils.getNow());
 		notaTransferenciaVO.setProperty("DTFATUR", TimeUtils.getNow());
 		notaTransferenciaVO.setProperty("NUMNOTA", BigDecimal.ZERO);
+		notaTransferenciaVO.setProperty("CIF_FOB", cabModeloSaidaVO.asString("CIF_FOB"));
+		notaTransferenciaVO.setProperty("AD_NUNOTAORIG", nuNotaOrig);
 		dwf.createEntity("CabecalhoNota", (EntityVO) notaTransferenciaVO);
+		
+		BigDecimal nuNotaModeloEntrada = buscaNunotaModeloEntrada();
+		DynamicVO cabModeloEntradaVO = cabecalhoDAO.findOne("NUNOTA = ?", nuNotaModeloEntrada);
 		
 		DynamicVO pedidoCompraTransfVO = (DynamicVO) dwf.getDefaultValueObjectInstance("CabecalhoNota");
 		pedidoCompraTransfVO.setProperty("CODEMP", BigDecimal.ONE);
-		pedidoCompraTransfVO.setProperty("CODPARC", new BigDecimal("263436"));
+		pedidoCompraTransfVO.setProperty("CODPARC", cabModeloEntradaVO.asBigDecimal("CODPARC"));
 		pedidoCompraTransfVO.setProperty("OBSERVACAO", "Pedido gerado automaticamente para suprimento de estoque na empresa 1");
 		pedidoCompraTransfVO.setProperty("CODTIPOPER", new BigDecimal("2000"));
 		pedidoCompraTransfVO.setProperty("DHTIPOPER", getDhTipOper(new BigDecimal("2000")));				
-		pedidoCompraTransfVO.setProperty("CODTIPVENDA", cabModeloVO.asBigDecimalOrZero("CODTIPVENDA"));
-		pedidoCompraTransfVO.setProperty("DHTIPVENDA", cabModeloVO.asTimestamp("DHTIPVENDA"));
-		pedidoCompraTransfVO.setProperty("CODNAT", cabModeloVO.asBigDecimalOrZero("CODNAT"));
-		pedidoCompraTransfVO.setProperty("CODCENCUS", cabModeloVO.asBigDecimalOrZero("CODCENCUS"));
+		pedidoCompraTransfVO.setProperty("CODTIPVENDA", cabModeloEntradaVO.asBigDecimalOrZero("CODTIPVENDA"));
+		pedidoCompraTransfVO.setProperty("DHTIPVENDA", cabModeloEntradaVO.asTimestamp("DHTIPVENDA"));
+		pedidoCompraTransfVO.setProperty("CODNAT", cabModeloEntradaVO.asBigDecimalOrZero("CODNAT"));
+		pedidoCompraTransfVO.setProperty("CODCENCUS", cabModeloEntradaVO.asBigDecimalOrZero("CODCENCUS"));
 		pedidoCompraTransfVO.setProperty("DTNEG", TimeUtils.getNow());
 		pedidoCompraTransfVO.setProperty("DTENTSAI", TimeUtils.getNow());
 		pedidoCompraTransfVO.setProperty("DTFATUR", TimeUtils.getNow());
 		pedidoCompraTransfVO.setProperty("NUMNOTA", BigDecimal.ZERO);
+		notaTransferenciaVO.setProperty("CIF_FOB", cabModeloEntradaVO.asString("CIF_FOB"));
+		notaTransferenciaVO.setProperty("AD_NUNOTAORIG", nuNotaOrig);
 		dwf.createEntity("CabecalhoNota", (EntityVO) pedidoCompraTransfVO);
 		
 		BigDecimal nuNotaTransfEntrada = pedidoCompraTransfVO.asBigDecimal("NUNOTA");
@@ -310,7 +378,7 @@ public class TdbHelper {
 		
 		for (Transferencia item : itensTransferencia) {
 						
-			BigDecimal custoSemIcms = ComercialUtils.getUltimoCusto(item.codProd, empresaOrigem, codLocal, " ", "CUSSEMICM");
+			BigDecimal custoSemIcms = ComercialUtils.getUltimoCusto(item.codProd, empresaOrigem, BigDecimal.ZERO, " ", "CUSGER");
 			
 			DynamicVO produtoVO = produtoDAO.findOne("CODPROD = ?", item.codProd);
 			DynamicVO itemSaidaVO = (DynamicVO) dwf.getDefaultValueObjectInstance("ItemNota");
@@ -334,7 +402,99 @@ public class TdbHelper {
 			itemEntradaVO.setProperty("VLRTOT", custoSemIcms.multiply(item.qtdNeg));
 			itemEntradaVO.setProperty("CODVOL", produtoVO.asString("CODVOL"));
 			itemEntradaVO.setProperty("ATUALESTOQUE", BigDecimal.ZERO);
-			itemEntradaVO.setProperty("RESERVA", "S");
+			itemEntradaVO.setProperty("RESERVA", "N");
+			dwf.createEntity("ItemNota", (EntityVO) itemEntradaVO);
+			
+			itemSaidaVO.clean();
+			itemEntradaVO.clean();
+			
+		}
+		
+		return notasTransferenca;
+	}
+
+	public static Map<String, BigDecimal> transfereSaldo6x1(Collection<Transferencia> itensTransferencia) throws Exception {
+		
+		Map<String, BigDecimal> notasTransferenca = new HashMap<String, BigDecimal>();
+		
+		EntityFacade dwf = EntityFacadeFactory.getDWFFacade();
+		JapeWrapper produtoDAO = JapeFactory.dao("Produto");
+		JapeWrapper cabecalhoDAO = JapeFactory.dao("CabecalhoNota");
+		final BigDecimal empresaOrigem = new BigDecimal("6");
+		
+		validaParametros();
+
+		BigDecimal nuNotaModeloSaida = buscaNunotaModeloSaida();
+		DynamicVO cabModeloSaidaVO = cabecalhoDAO.findOne("NUNOTA = ?", nuNotaModeloSaida);
+		
+		DynamicVO notaTransferenciaVO = (DynamicVO) dwf.getDefaultValueObjectInstance("CabecalhoNota");
+		notaTransferenciaVO.setProperty("CODEMP", cabModeloSaidaVO.asBigDecimalOrZero("CODEMP"));
+		notaTransferenciaVO.setProperty("CODPARC", cabModeloSaidaVO.asBigDecimalOrZero("CODPARC"));
+		notaTransferenciaVO.setProperty("OBSERVACAO", "Pedido gerado automaticamente para suprimento de estoque na empresa 1");
+		notaTransferenciaVO.setProperty("CODTIPOPER", cabModeloSaidaVO.asBigDecimalOrZero("CODTIPOPER"));
+		notaTransferenciaVO.setProperty("DHTIPOPER", cabModeloSaidaVO.asTimestamp("DHTIPOPER"));				
+		notaTransferenciaVO.setProperty("CODTIPVENDA", cabModeloSaidaVO.asBigDecimalOrZero("CODTIPVENDA"));
+		notaTransferenciaVO.setProperty("DHTIPVENDA", cabModeloSaidaVO.asTimestamp("DHTIPVENDA"));
+		notaTransferenciaVO.setProperty("CODNAT", cabModeloSaidaVO.asBigDecimalOrZero("CODNAT"));
+		notaTransferenciaVO.setProperty("CODCENCUS", cabModeloSaidaVO.asBigDecimalOrZero("CODCENCUS"));
+		notaTransferenciaVO.setProperty("DTNEG", TimeUtils.getNow());
+		notaTransferenciaVO.setProperty("DTENTSAI", TimeUtils.getNow());
+		notaTransferenciaVO.setProperty("DTFATUR", TimeUtils.getNow());
+		notaTransferenciaVO.setProperty("NUMNOTA", BigDecimal.ZERO);
+		notaTransferenciaVO.setProperty("CIF_FOB", cabModeloSaidaVO.asString("CIF_FOB"));
+		dwf.createEntity("CabecalhoNota", (EntityVO) notaTransferenciaVO);
+		
+		BigDecimal nuNotaModeloEntrada = buscaNunotaModeloEntrada();
+		DynamicVO cabModeloEntradaVO = cabecalhoDAO.findOne("NUNOTA = ?", nuNotaModeloEntrada);
+		
+		DynamicVO pedidoCompraTransfVO = (DynamicVO) dwf.getDefaultValueObjectInstance("CabecalhoNota");
+		pedidoCompraTransfVO.setProperty("CODEMP", BigDecimal.ONE);
+		pedidoCompraTransfVO.setProperty("CODPARC", new BigDecimal("263436"));
+		pedidoCompraTransfVO.setProperty("OBSERVACAO", "Pedido gerado automaticamente para suprimento de estoque na empresa 1");
+		pedidoCompraTransfVO.setProperty("CODTIPOPER", new BigDecimal("2000"));
+		pedidoCompraTransfVO.setProperty("DHTIPOPER", getDhTipOper(new BigDecimal("2000")));				
+		pedidoCompraTransfVO.setProperty("CODTIPVENDA", cabModeloEntradaVO.asBigDecimalOrZero("CODTIPVENDA"));
+		pedidoCompraTransfVO.setProperty("DHTIPVENDA", cabModeloEntradaVO.asTimestamp("DHTIPVENDA"));
+		pedidoCompraTransfVO.setProperty("CODNAT", cabModeloEntradaVO.asBigDecimalOrZero("CODNAT"));
+		pedidoCompraTransfVO.setProperty("CODCENCUS", cabModeloEntradaVO.asBigDecimalOrZero("CODCENCUS"));
+		pedidoCompraTransfVO.setProperty("DTNEG", TimeUtils.getNow());
+		pedidoCompraTransfVO.setProperty("DTENTSAI", TimeUtils.getNow());
+		pedidoCompraTransfVO.setProperty("DTFATUR", TimeUtils.getNow());
+		pedidoCompraTransfVO.setProperty("NUMNOTA", BigDecimal.ZERO);
+		dwf.createEntity("CabecalhoNota", (EntityVO) pedidoCompraTransfVO);
+		
+		BigDecimal nuNotaTransfEntrada = pedidoCompraTransfVO.asBigDecimal("NUNOTA");
+		BigDecimal nuNotaTransfSaida = notaTransferenciaVO.asBigDecimal("NUNOTA");
+		notasTransferenca.put("NUNOTATRANSFENTRADA", nuNotaTransfEntrada);
+		notasTransferenca.put("NUNOTATRANSFSAIDA", nuNotaTransfSaida);
+		
+		for (Transferencia item : itensTransferencia) {
+						
+			BigDecimal custoSemIcms = ComercialUtils.getUltimoCusto(item.codProd, empresaOrigem, BigDecimal.ZERO, " ", "CUSGER");
+			
+			DynamicVO produtoVO = produtoDAO.findOne("CODPROD = ?", item.codProd);
+			DynamicVO itemSaidaVO = (DynamicVO) dwf.getDefaultValueObjectInstance("ItemNota");
+			itemSaidaVO.setProperty("NUNOTA", nuNotaTransfSaida);
+			itemSaidaVO.setProperty("CODEMP", empresaOrigem);
+			itemSaidaVO.setProperty("CODPROD", item.codProd);
+			itemSaidaVO.setProperty("QTDNEG", item.qtdNeg);
+			itemSaidaVO.setProperty("VLRUNIT", custoSemIcms);
+			itemSaidaVO.setProperty("VLRTOT", custoSemIcms.multiply(item.qtdNeg));
+			itemSaidaVO.setProperty("CODVOL", produtoVO.asString("CODVOL"));
+			itemSaidaVO.setProperty("ATUALESTOQUE", BigDecimal.ONE);
+			itemSaidaVO.setProperty("RESERVA", "S");
+			dwf.createEntity("ItemNota", (EntityVO) itemSaidaVO);
+			
+			DynamicVO itemEntradaVO = (DynamicVO) dwf.getDefaultValueObjectInstance("ItemNota");
+			itemEntradaVO.setProperty("NUNOTA", nuNotaTransfEntrada);
+			itemEntradaVO.setProperty("CODEMP", BigDecimal.ONE);
+			itemEntradaVO.setProperty("CODPROD", item.codProd);
+			itemEntradaVO.setProperty("QTDNEG", item.qtdNeg);
+			itemEntradaVO.setProperty("VLRUNIT", custoSemIcms);
+			itemEntradaVO.setProperty("VLRTOT", custoSemIcms.multiply(item.qtdNeg));
+			itemEntradaVO.setProperty("CODVOL", produtoVO.asString("CODVOL"));
+			itemEntradaVO.setProperty("ATUALESTOQUE", BigDecimal.ZERO);
+			itemEntradaVO.setProperty("RESERVA", "N");
 			dwf.createEntity("ItemNota", (EntityVO) itemEntradaVO);
 			
 			itemSaidaVO.clean();
@@ -347,9 +507,16 @@ public class TdbHelper {
 	
 
 	public static Timestamp getDhTipOper(BigDecimal codTipOper) throws Exception {
-		JapeWrapper topDAO = JapeFactory.dao("TipoOperacao");
-		DynamicVO topVO = topDAO.findOne("CODTIPOPER = ? AND DHALTER = (SELECT MAX(DHALTER) FROM TGFTOP T WHERE T.CODTIPOPER = TGFTOP.CODTIPOPER)", codTipOper);
-		return topVO.asTimestamp("DHALTER");
+		EntityFacade dwf = EntityFacadeFactory.getDWFFacade();
+		NativeSql sqlTop = new NativeSql(dwf.getJdbcWrapper());
+		sqlTop.appendSql("SELECT DHALTER FROM TGFTOP T WHERE T.CODTIPOPER = :CODTIPOPER AND T.DHALTER = (SELECT MAX(TT.DHALTER) FROM TGFTOP TT WHERE TT.CODTIPOPER = TT.CODTIPOPER)");
+		sqlTop.setNamedParameter("CODTIPOPER", codTipOper);
+		
+		ResultSet rs = sqlTop.executeQuery();
+		if (rs.next()) {
+			return rs.getTimestamp(1);
+		}
+		return null;
 	}
 
 	public static Collection<Split> agrupaSplitPorEmpresa(Collection<Split> quebraPedido) {

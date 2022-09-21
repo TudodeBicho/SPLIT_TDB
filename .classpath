@@ -15,5 +15,6 @@
 	<classpathentry kind="lib" path="lib/SankhyaW-extensions.jar"/>
 	<classpathentry kind="lib" path="lib/sanutil-4.6b292.jar"/>
 	<classpathentry kind="lib" path="lib/mgecom-model-4.12b160.jar"/>
+	<classpathentry kind="lib" path="lib/sanws-4.10b143.jar"/>
 	<classpathentry kind="output" path="bin"/>
 </classpath>

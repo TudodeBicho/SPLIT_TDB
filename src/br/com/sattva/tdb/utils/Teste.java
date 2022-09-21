@@ -1,14 +1,18 @@
 package br.com.sattva.tdb.utils;
 
 import java.math.BigDecimal;
+import java.sql.ResultSet;
 import java.util.ArrayList;
 import java.util.Collection;
 
+import br.com.sankhya.jape.EntityFacade;
+import br.com.sankhya.jape.sql.NativeSql;
+import br.com.sankhya.modelcore.util.EntityFacadeFactory;
 import br.com.sattva.tdb.job.Split;
 
 public class Teste {
 
-	public static void main(String[] args) {
+	public static void main(String[] args) throws Exception {
 		// TODO Auto-generated method stub
 		Collection<Split> quebraPedido = new ArrayList();
 		Collection<Split> itensEmpresa1 = new ArrayList();
@@ -89,7 +93,9 @@ public class Teste {
 		}
 		
 		
-		
+		EntityFacade dwf = EntityFacadeFactory.getDWFFacade();
+		NativeSql ns = new NativeSql(dwf.getJdbcWrapper());
+
 		
 	}
 
