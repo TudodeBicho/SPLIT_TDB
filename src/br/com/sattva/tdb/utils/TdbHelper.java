@@ -19,6 +19,7 @@ import br.com.sankhya.jape.vo.DynamicVO;
 import br.com.sankhya.jape.vo.EntityVO;
 import br.com.sankhya.jape.wrapper.JapeFactory;
 import br.com.sankhya.jape.wrapper.JapeWrapper;
+import br.com.sankhya.mgecomercial.model.centrais.cac.CACSPBean;
 import br.com.sankhya.modelcore.auth.AuthenticationInfo;
 import br.com.sankhya.modelcore.comercial.CentralFinanceiro;
 import br.com.sankhya.modelcore.comercial.ComercialUtils;
@@ -171,12 +172,11 @@ public class TdbHelper {
 			trocaInformacoesCab.put("CODTIPOPER", buscaTopPosSplit());
 			trocaInformacoesCab.put("DHTIPOPER", getDhTipOper(buscaTopPosSplit()));
 			
-			if (codEmp.intValue() != 5) {
+			if (codEmp.intValue() != 5 && empresasCabecalho.size() > 1) {
 				trocaInformacoesCab.put("VLRFRETE", BigDecimal.ZERO);
 			} else {
 				
 				String transportadoras = "'CORREIOS'-'CORREIOS PAC'-'CORREIOS SEDEX'";
-				System.out.println("[Stva1]");
 				String bhMetodo = "";
 				
 				if(pedidoVO.asString("BH_METODO") == null) {
@@ -185,43 +185,49 @@ public class TdbHelper {
 					bhMetodo = transportadoras.indexOf(pedidoVO.asString("BH_METODO")) > -1 ? pedidoVO.asString("BH_METODO") : "JADLOG PACKAGE";					
 				}
 				
-				System.out.println("[Stva2]");
 				BigDecimal codParcTrans = BigDecimal.ZERO;
 				if(bhMetodo!= null) {
 					codParcTrans = localizaTransportadoraByMetodo(bhMetodo);										
 				}
 				
+				System.out.println("[Sattva] - Vlr. Frete: " + pedidoVO.asBigDecimal("VLRFRETE"));
 				trocaInformacoesCab.put("VLRFRETE", pedidoVO.asBigDecimal("VLRFRETE"));
 				trocaInformacoesCab.put("BH_METODO", bhMetodo);
 				trocaInformacoesCab.put("CODPARCTRANSP", codParcTrans);
 			}
 			
+			System.out.println("[Sattva] - trocaInformacoesCab: \n" + trocaInformacoesCab.toString());
+			
 			Map<String, Object> pkNewNuNota = CentralNotasUtils.duplicaRegistro(pedidoVO, "CabecalhoNota", trocaInformacoesCab);
 			nroUnicoNovosPedidos.add((BigDecimal) pkNewNuNota.get("NUNOTA"));
 			nuNotaCodEmp.put(codEmp, (BigDecimal) pkNewNuNota.get("NUNOTA"));
+			/*
+			System.out.println("[Sattva] - Recalculando imposto e financeiro");
+			recalculaImpostoEFinanceiro((BigDecimal) pkNewNuNota.get("NUNOTA"));
+			System.out.println("[Sattva] - Recalculo finalizado");
+			*/
 
 			
 			for (Split pedido : pedidosSplit) {
 				if (pedido.codEmp.intValue() == codEmp.intValue()) {
 					System.out.println("Inserindo itens split");
-					insereItensEmpresa(pkNewNuNota, codEmp, pedido.codProd, pedido.qtdNeg, pedidoVO.asBigDecimal("NUNOTA"));						
-					
+					insereItensEmpresa(pkNewNuNota, codEmp, pedido.codProd, pedido.qtdNeg, pedidoVO.asBigDecimal("NUNOTA"));
 				}
 			}
 		}
 		
-		vinculaTgfvar(nroUnicoNovosPedidos, pedidoVO.asBigDecimal("NUNOTA"));
-		System.out.println("[Sattva] - Vinculou TGFVAR");
-		
+//		vinculaTgfvar(nroUnicoNovosPedidos, pedidoVO.asBigDecimal("NUNOTA"));
+//		System.out.println("[Sattva] - Vinculou TGFVAR");
+		/*
 		for (BigDecimal nroUnico : nroUnicoNovosPedidos) {
 			System.out.println("[Sattva] - Recalculando imposto e financeiro");
 			recalculaImpostoEFinanceiro(nroUnico);
 			System.out.println("[Sattva] - Recalculo finalizado");
 		}
-		
+		*/
 		return nuNotaCodEmp;
 		
-	}
+	} 
 	
 	private static BigDecimal localizaTransportadoraByMetodo(String bhMetodo) throws Exception {
 		JapeWrapper parceiroDAO = JapeFactory.dao("Parceiro");		
@@ -237,7 +243,7 @@ public class TdbHelper {
 		ih.setForcarRecalculo(true);
 		ih.calcularImpostos(nroUnico);
 
-		CentralFinanceiro financeiro = new CentralFinanceiro();		
+		CentralFinanceiro financeiro = new CentralFinanceiro();	
 		financeiro.inicializaNota(nroUnico);
 		financeiro.refazerFinanceiro();
 		
@@ -250,6 +256,10 @@ public class TdbHelper {
 		System.out.println("[SattvaLog9] ");
 		
 		for (BigDecimal nroUnico : nroUnicoNovosPedidos) {
+			
+			System.out.println("[Sattva] - Recalculando imposto e financeiro");
+			recalculaImpostoEFinanceiro(nroUnico);
+			System.out.println("[Sattva] - Recalculo finalizado");
 			
 			Collection<DynamicVO> itensNewVO = itemDAO.find("NUNOTA = ?", nroUnico);
 			for (DynamicVO itemNewVO : itensNewVO) {
@@ -268,7 +278,7 @@ public class TdbHelper {
 				} catch (Exception e) {
 					JapeWrapper logDAO = JapeFactory.dao("AD_LOGSPLIT");
 					logDAO.create()
-		        	.set("DESCRICAO", "Pedido ja foi faturado... " + e.toString())
+		        	.set("DESCRICAO", ("Pedido ja foi faturado... " + e.toString()).toCharArray())
 		        	.set("NUNOTAORIG", itemOldVO.asBigDecimal("NUNOTA"))
 		        	.set("DHINCLUSAO", TimeUtils.getNow())
 		        	.set("STATUSPROCESSAMENTO", "E")
@@ -357,8 +367,8 @@ public static Map<String, BigDecimal> transfereSaldo6x1(Collection<Transferencia
 		pedidoCompraTransfVO.setProperty("CODEMP", BigDecimal.ONE);
 		pedidoCompraTransfVO.setProperty("CODPARC", cabModeloEntradaVO.asBigDecimal("CODPARC"));
 		pedidoCompraTransfVO.setProperty("OBSERVACAO", "Pedido gerado automaticamente para suprimento de estoque na empresa 1");
-		pedidoCompraTransfVO.setProperty("CODTIPOPER", new BigDecimal("2000"));
-		pedidoCompraTransfVO.setProperty("DHTIPOPER", getDhTipOper(new BigDecimal("2000")));				
+		pedidoCompraTransfVO.setProperty("CODTIPOPER", cabModeloEntradaVO.asBigDecimalOrZero("CODTIPOPER"));
+		pedidoCompraTransfVO.setProperty("DHTIPOPER", getDhTipOper(cabModeloEntradaVO.asBigDecimalOrZero("CODTIPOPER")));				
 		pedidoCompraTransfVO.setProperty("CODTIPVENDA", cabModeloEntradaVO.asBigDecimalOrZero("CODTIPVENDA"));
 		pedidoCompraTransfVO.setProperty("DHTIPVENDA", cabModeloEntradaVO.asTimestamp("DHTIPVENDA"));
 		pedidoCompraTransfVO.setProperty("CODNAT", cabModeloEntradaVO.asBigDecimalOrZero("CODNAT"));
@@ -451,8 +461,8 @@ public static Map<String, BigDecimal> transfereSaldo6x1(Collection<Transferencia
 		pedidoCompraTransfVO.setProperty("CODEMP", BigDecimal.ONE);
 		pedidoCompraTransfVO.setProperty("CODPARC", new BigDecimal("263436"));
 		pedidoCompraTransfVO.setProperty("OBSERVACAO", "Pedido gerado automaticamente para suprimento de estoque na empresa 1");
-		pedidoCompraTransfVO.setProperty("CODTIPOPER", new BigDecimal("2000"));
-		pedidoCompraTransfVO.setProperty("DHTIPOPER", getDhTipOper(new BigDecimal("2000")));				
+		pedidoCompraTransfVO.setProperty("CODTIPOPER",cabModeloEntradaVO.asBigDecimalOrZero("CODTIPOPER"));
+		pedidoCompraTransfVO.setProperty("DHTIPOPER", getDhTipOper(cabModeloEntradaVO.asBigDecimalOrZero("CODTIPOPER")));				
 		pedidoCompraTransfVO.setProperty("CODTIPVENDA", cabModeloEntradaVO.asBigDecimalOrZero("CODTIPVENDA"));
 		pedidoCompraTransfVO.setProperty("DHTIPVENDA", cabModeloEntradaVO.asTimestamp("DHTIPVENDA"));
 		pedidoCompraTransfVO.setProperty("CODNAT", cabModeloEntradaVO.asBigDecimalOrZero("CODNAT"));
@@ -826,5 +836,48 @@ public static Map<String, BigDecimal> transfereSaldo6x1(Collection<Transferencia
     		}
     	}
 	return log;
+	}
+
+	public static void vinculaTgfvar(Map<BigDecimal, BigDecimal> listaNroUnicoEmpresa, BigDecimal nuNotaOriginal) throws Exception {
+		JapeWrapper tgfvarDAO = JapeFactory.dao("CompraVendavariosPedido");
+		JapeWrapper itemDAO = JapeFactory.dao("ItemNota");
+		
+		System.out.println("[SattvaLog9] ");
+		
+		for (Map.Entry<BigDecimal, BigDecimal> nroUnico : listaNroUnicoEmpresa.entrySet()) {
+			
+			/*
+			System.out.println("[Sattva] - Recalculando imposto e financeiro");
+			recalculaImpostoEFinanceiro(nroUnico.getValue());
+			System.out.println("[Sattva] - Recalculo finalizado");
+			*/
+			Collection<DynamicVO> itensNewVO = itemDAO.find("NUNOTA = ?", nroUnico.getValue());
+			for (DynamicVO itemNewVO : itensNewVO) {
+				
+				DynamicVO itemOldVO = itemDAO.findOne("NUNOTA = ? AND CODPROD = ?", nuNotaOriginal, itemNewVO.asBigDecimal("CODPROD"));
+
+				try {
+					tgfvarDAO.create()
+					.set("NUNOTA", nroUnico.getValue())
+					.set("SEQUENCIA", itemNewVO.asBigDecimal("SEQUENCIA"))
+					.set("NUNOTAORIG", itemOldVO.asBigDecimal("NUNOTA"))
+					.set("SEQUENCIAORIG", itemOldVO.asBigDecimal("SEQUENCIA"))
+					.set("QTDATENDIDA", itemNewVO.asBigDecimal("QTDNEG"))
+					.save();
+					
+				} catch (Exception e) {
+					JapeWrapper logDAO = JapeFactory.dao("AD_LOGSPLIT");
+					logDAO.create()
+		        	.set("DESCRICAO", ("Pedido ja foi faturado... " + e.toString()).toCharArray())
+		        	.set("NUNOTAORIG", itemOldVO.asBigDecimal("NUNOTA"))
+		        	.set("DHINCLUSAO", TimeUtils.getNow())
+		        	.set("STATUSPROCESSAMENTO", "E")
+		        	.save();
+				}
+				
+			}
+			
+		}
+		
 	}
 }

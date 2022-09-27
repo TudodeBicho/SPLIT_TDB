@@ -11,8 +11,10 @@ import java.util.Map;
 import org.cuckoo.core.ScheduledAction;
 import org.cuckoo.core.ScheduledActionContext;
 
+import com.sankhya.util.BigDecimalUtil;
 import com.sankhya.util.TimeUtils;
 
+import br.com.sankhya.extensions.actionbutton.QueryExecutor;
 import br.com.sankhya.jape.EntityFacade;
 import br.com.sankhya.jape.bmp.PersistentLocalEntity;
 import br.com.sankhya.jape.sql.NativeSql;
@@ -25,6 +27,7 @@ import br.com.sankhya.modelcore.auth.AuthenticationInfo;
 import br.com.sankhya.modelcore.util.DynamicEntityNames;
 import br.com.sankhya.modelcore.util.EntityFacadeFactory;
 import br.com.sankhya.ws.ServiceContext;
+import br.com.sattva.tdb.utils.CentralNotasUtils;
 import br.com.sattva.tdb.utils.TdbHelper;
 
 public class SplitPedidos implements ScheduledAction {
@@ -40,6 +43,7 @@ public class SplitPedidos implements ScheduledAction {
 	JapeWrapper itemDAO = JapeFactory.dao("ItemNota");
 	JapeWrapper logDAO = JapeFactory.dao("AD_LOGSPLIT");
 	EntityFacade dwf = EntityFacadeFactory.getDWFFacade();
+	BigDecimal saldoDesconto = BigDecimal.ZERO;
 
 	@Override
 	public void onTime(ScheduledActionContext arg0) {
@@ -56,9 +60,11 @@ public class SplitPedidos implements ScheduledAction {
 
 			ResultSet rs = sqlPedidosAptos.executeQuery();
 			while (rs.next()) {
-				
 				PersistentLocalEntity registroPLE = dwf.findEntityByPrimaryKey("CabecalhoNota", rs.getBigDecimal("NUNOTA"));
 				DynamicVO pedidoVO = (DynamicVO) registroPLE.getValueObject();
+				
+				BigDecimal vlrDescTot = rs.getBigDecimal("VLRDESCTOT");
+				BigDecimal vlrNota = rs.getBigDecimal("VLRNOTA").add(rs.getBigDecimal("VLRDESCTOT"));
 				
 				log = "";
 				System.out.println("[Sattva] - 2.1");
@@ -89,14 +95,20 @@ public class SplitPedidos implements ScheduledAction {
 				}
 
 				System.out.println("[Sattva] - Nro Unico do Pre Split: " + nuNotaPreSplit);
-
+				
 				if (codCidadeDestino != null && "4798-2475".indexOf(codCidadeDestino.toString()) > -1) {
 					log += "Regra Prioridade: Empresa 1, Empresa 6 e Empresa 5";
 					regraPrioridade = "165";
 				} else {
-					log += "Regra Prioridade: Empresa 5, Empresa 1 e Empresa 6";
-					regraPrioridade = "516";
+					if (codCidadeDestino == null && pedidoVO.asString("BH_METODO").equalsIgnoreCase("FROTA INTERNA STANDART")) {
+						log += "Regra Prioridade: Empresa 1, Empresa 6 e Empresa 5";
+						regraPrioridade = "165";
+					} else {
+						log += "Regra Prioridade: Empresa 5, Empresa 1 e Empresa 6";
+						regraPrioridade = "516";
+					}
 				}
+
 
 				System.out.println("[Sattva] - 4");
 				
@@ -108,20 +120,18 @@ public class SplitPedidos implements ScheduledAction {
 					itensPreSplit.add((DynamicVO)itemPrePLE.getValueObject());
 				}
 				
-				
-				
 //				Collection<DynamicVO> itensPreSplit = itemDAO.find("NUNOTA = ?", nuNotaPreSplit);
 				
 				log += "\nNroUnico Pre Split: " + nuNotaPreSplit;
+				log += "\nBH_CODEMKT: " + pedidoVO.asString("BH_CODMKT");
 				log += "\nQuantidade de Itens: " + itensPreSplit.size();
 				log += "\nCidade de Destino:" + codCidadeDestino + "-" + nomeCidadeDestino;
 				System.out.println("[Sattva] - Chegou aqui...");
 
-				System.out.println("Antes");
 				doSplit(regraPrioridade, itensPreSplit, nuNotaPreSplit, itensTransferencia, splitPedidos);
-				System.out.println("Depois do doSplit");
 
 				if (geraTransferencia) {
+					System.out.println("[Sattva] - Gerando Transferencias - Inicio");
 					Map<String, BigDecimal> nroUnicoTransf = TdbHelper.transfereSaldo6x1(itensTransferencia);
 					log += "\n\nNro.Unico.Transferencia Saida..: " + nroUnicoTransf.get("NUNOTATRANSFSAIDA");
 					log += "\nNro.Unico.Transferencia Entrada: " + nroUnicoTransf.get("NUNOTATRANSFENTRADA") + "\n";
@@ -130,31 +140,54 @@ public class SplitPedidos implements ScheduledAction {
 					TdbHelper.recalculaImpostoEFinanceiro(nroUnicoTransf.get("NUNOTATRANSFSAIDA"));
 					TdbHelper.recalculaImpostoEFinanceiro(nroUnicoTransf.get("NUNOTATRANSFENTRADA"));
 					System.out.println("[Sattva] - Fim - Recalculando transferencia");
+					
+					System.out.println("[Sattva] - Gerando Transferencias - Fim");
 				}
 
-				System.out.println("Depois da transferencia");
+				System.out.println("[Sattva] - Agrupando Split por Empresa");
 				Collection<Split> pedidosSplit = TdbHelper.agrupaSplitPorEmpresa(splitPedidos);
-
 				Map<BigDecimal, BigDecimal> listaNroUnicoEmpresa = new HashMap<BigDecimal, BigDecimal>();
 				
 				authenticate(BigDecimal.ZERO);
 
-				System.out.println("GeraLancamentosSplit");
+				System.out.println("[Sattva] - Gerando Lançamentos Splits - Inicio");
 				listaNroUnicoEmpresa = TdbHelper.geraLancamentosSplit(pedidoVO, pedidosSplit);
+				System.out.println("[Sattva] - Gerando Lançamentos Splits - Fim");
 
-				imprimeSplitFinal(pedidosSplit, listaNroUnicoEmpresa);
+				System.out.println("[Sattva] - Imprimindo Log - Inicio");
+            	imprimeSplitFinal(pedidosSplit, listaNroUnicoEmpresa);
+            	System.out.println("[Sattva] - Imprimindo Log - Fim");
+				
+            	if (vlrDescTot.doubleValue() > 0) {
+            		System.out.println("[Sattva] - Atualizando desconto dos lançamentos splitados - Inicio");
+            		atualizaDesconto(listaNroUnicoEmpresa, vlrNota, vlrDescTot, saldoDesconto);                    		
+            		System.out.println("[Sattva] - Atualizando desconto dos lançamentos splitados - Fim");
+            	}
+				
+            	System.out.println("[Sattva] - Refazendo os valores dos pedidos - Inicio");
+				refazValoresTotaisPedido(listaNroUnicoEmpresa);
+				System.out.println("[Sattva] - Refazendo os valores dos pedidos - Fim");
+				
+				System.out.println("[Sattva] - Fazendo ligações na TGFVAR - Inicio");
+            	TdbHelper.vinculaTgfvar(listaNroUnicoEmpresa, pedidoVO.asBigDecimal("NUNOTA"));
+            	System.out.println("[Sattva] - Fazendo ligações na TGFVAR - Fim");
 
-				BigDecimal topPosSplit = TdbHelper.buscaTopPosSplit();
+				cabecalhoDAO.prepareToUpdate(pedidoVO)
+				.set("CODTIPOPER", topPreSplit)
+				.set("DHTIPOPER", TdbHelper.getDhTipOper(topPreSplit))
+				.update();
 
-				cabecalhoDAO.prepareToUpdate(pedidoVO).set("CODTIPOPER", topPosSplit)
-						.set("DHTIPOPER", TdbHelper.getDhTipOper(topPosSplit)).update();
-
-//                    	CentralNotasUtils.confirmarNota(pedidoVO.asBigDecimal("NUNOTA"));
-
-				logDAO.create().set("DESCRICAO", log.toCharArray()).set("NUNOTAORIG", pedidoVO.asBigDecimal("NUNOTA"))
-						.set("DHINCLUSAO", TimeUtils.getNow()).set("STATUSPROCESSAMENTO", statusProcessamento).save();
+				logDAO.create()
+				.set("DESCRICAO", log.toCharArray())
+				.set("NUNOTAORIG", pedidoVO.asBigDecimal("NUNOTA"))
+				.set("DHINCLUSAO", TimeUtils.getNow())
+				.set("STATUSPROCESSAMENTO", statusProcessamento)
+				.save();
 
 			}
+			
+			System.out.println("[Sattva] - Proximo pedido... alterando variavel para zero.");
+			saldoDesconto = BigDecimal.ZERO;
 			
 			System.out.println("[Sattva] - Pos loop");
 
@@ -166,6 +199,139 @@ public class SplitPedidos implements ScheduledAction {
 		}
 	}
 	
+	private void refazValoresTotaisPedido(Map<BigDecimal, BigDecimal> listaNroUnicoEmpresa) throws Exception {
+		System.out.println("[Sattva] - Refazendo Valores: " + listaNroUnicoEmpresa);
+		
+		for (Map.Entry<BigDecimal, BigDecimal> nuNotaEmp : listaNroUnicoEmpresa.entrySet()) {
+			System.out.println("[Sattva] - Recalculando imposto e financeiro");
+			TdbHelper.recalculaImpostoEFinanceiro(nuNotaEmp.getValue());
+			System.out.println("[Sattva] - Recalculo finalizado");
+		}
+	
+	}
+	
+	private void atualizaDesconto(Map<BigDecimal, BigDecimal> listaNroUnicoEmpresa, BigDecimal vlrNota, BigDecimal vlrDescTot, BigDecimal saldoDesconto2) throws Exception {
+		System.out.println("[Sattva] - Lista de Nro.Unico p/ desconto: " + listaNroUnicoEmpresa);
+		System.out.println("[Sattva] - Saldo Desconto: " + saldoDesconto);
+		
+		BigDecimal vlrDesconto = BigDecimal.ZERO;	
+		
+		for (Map.Entry<BigDecimal, BigDecimal> nuNotaEmp : listaNroUnicoEmpresa.entrySet()) {
+			
+			if (vlrDesconto.doubleValue() > 0) {
+				
+				System.out.println("[Sattva] - Saldo do desconto > 0... utilizando a regra de acumulado...");
+				System.out.println("[Sattva] - vlrDescTot: " + vlrDescTot + ", saldoDesconto: " + saldoDesconto);
+				
+				vlrDesconto = vlrDescTot.subtract(vlrDesconto);
+				
+				cabecalhoDAO.prepareToUpdateByPK(nuNotaEmp.getValue()).set("VLRDESCTOT", vlrDesconto).update();
+				
+				/*
+				System.out.println("[Sattva] - Recalculando imposto e financeiro");
+    			TdbHelper.recalculaImpostoEFinanceiro(nuNotaEmp.getValue());
+    			System.out.println("[Sattva] - Recalculo finalizado");
+    			*/
+    			
+			} else {
+				
+				EntityFacade dwf = EntityFacadeFactory.getDWFFacade();
+				NativeSql qrySomaItens = new NativeSql(dwf.getJdbcWrapper());
+				qrySomaItens.appendSql("SELECT "
+						+ "SUM(ITE.VLRTOT) AS TOTAL"
+						+ ", CAB.VLRFRETE "
+						+ ", SUM(ITE.VLRTOT) * VCAB.INDITENS AS TOTAL_PROP "
+						+ "FROM TGFITE ITE "
+						+ "JOIN TGFCAB CAB ON ITE.NUNOTA = CAB.NUNOTA "
+						+ "JOIN VGFCAB VCAB ON CAB.NUNOTA = VCAB.NUNOTA "
+						+ "WHERE ITE.NUNOTA = :NUNOTA AND ITE.USOPROD <> 'D' "
+						+ "GROUP BY CAB.VLRFRETE, VCAB.INDITENS");
+				qrySomaItens.setNamedParameter("NUNOTA", nuNotaEmp.getValue());
+				
+				ResultSet rs = qrySomaItens.executeQuery();
+				if (rs.next()) {
+					
+					if (rs.getBigDecimal(1).doubleValue() > vlrNota.doubleValue()) {
+						// entrando aqui significa que o desconto ja foi rateado para os itens
+						vlrDesconto = BigDecimalUtil.getRounded(((rs.getBigDecimal(1).add(rs.getBigDecimal(2))).multiply(vlrDescTot)).divide((vlrNota.add(vlrDescTot)),10,5),2);	
+						
+						System.out.println("[Sattva] - #Memoria Calculo Desconto: Total Itens: " 
+								+ rs.getBigDecimal(1) 
+								+ ", Vlr Frete: " 
+								+ rs.getBigDecimal(2)
+								+ ", Desconto Total: " + vlrDescTot + ", Valor do Pedido: " +  vlrNota.add(vlrDescTot));
+						System.out.println("[Sattva] - Valor do desconto proporcional para a nota " + nuNotaEmp.getValue() + ": " + vlrDesconto);
+						
+						
+						
+					} else {
+						vlrDesconto = BigDecimalUtil.getRounded(((rs.getBigDecimal(1).add(rs.getBigDecimal(2))).multiply(vlrDescTot)).divide(vlrNota,10,5),2);
+						
+						System.out.println("[Sattva] - Memoria Calculo Desconto: Total Itens: " 
+								+ rs.getBigDecimal(1) 
+								+ ", Vlr Frete: " 
+								+ rs.getBigDecimal(2)
+								+ ", Desconto Total: " + vlrDescTot + ", Valor do Pedido: " +  vlrNota);
+						System.out.println("[Sattva] - Valor do desconto proporcional para a nota " + nuNotaEmp.getValue() + ": " + vlrDesconto);
+						
+					}
+					
+					cabecalhoDAO.prepareToUpdateByPK(nuNotaEmp.getValue()).set("VLRDESCTOT", vlrDesconto).update();
+					
+					System.out.println("[Sattva] - Atualizado desconto");
+					
+					/*
+					System.out.println("[Sattva] - Recalculando imposto e financeiro");
+        			TdbHelper.recalculaImpostoEFinanceiro(nuNotaEmp.getValue());
+        			System.out.println("[Sattva] - Recalculo finalizado");
+        			*/
+					
+				}
+			}
+			
+		}
+		
+		
+	}
+
+	private void atualizaDesconto(Map<BigDecimal, BigDecimal> listaNroUnicoEmpresa, BigDecimal vlrNota, BigDecimal vlrDescTot) throws Exception {
+		
+		for (Map.Entry<BigDecimal, BigDecimal> nuNotaEmp : listaNroUnicoEmpresa.entrySet()) {
+			
+			EntityFacade dwf = EntityFacadeFactory.getDWFFacade();
+			NativeSql qrySomaItens = new NativeSql(dwf.getJdbcWrapper());
+			qrySomaItens.appendSql("SELECT "
+					+ "SUM(ITE.VLRTOT) AS TOTAL"
+					+ ", CAB.VLRFRETE "
+					+ ", SUM(ITE.VLRTOT) * VCAB.INDITENS AS TOTAL_PROP "
+					+ "FROM TGFITE ITE "
+					+ "JOIN TGFCAB CAB ON ITE.NUNOTA = CAB.NUNOTA "
+					+ "JOIN VGFCAB VCAB ON CAB.NUNOTA = VCAB.NUNOTA "
+					+ "WHERE ITE.NUNOTA = :NUNOTA AND ITE.USOPROD <> 'D' "
+					+ "GROUP BY CAB.VLRFRETE, VCAB.INDITENS");
+			qrySomaItens.setNamedParameter("NUNOTA", nuNotaEmp.getValue());
+			
+			ResultSet rs = qrySomaItens.executeQuery();
+			if (rs.next()) {
+				BigDecimal vlrDesconto = ((rs.getBigDecimal(1).add(rs.getBigDecimal(2))).multiply(vlrDescTot)).divide(vlrNota,10,5);
+				System.out.println("[Sattva] - Memoria Calculo Desconto: Total Itens: " + rs.getBigDecimal(1) + ", Vlr Frete: " + rs.getBigDecimal(2)
+						+ ", Desconto Total: " + vlrDescTot + ", Valor do Pedido: " +  vlrNota);
+				System.out.println("[Sattva] - Valor do desconto proporcional para a nota " + nuNotaEmp.getValue() + ": " + vlrDesconto);
+				
+				cabecalhoDAO.prepareToUpdateByPK(nuNotaEmp.getValue()).set("VLRDESCTOT", vlrDesconto).update();
+				
+				System.out.println("[Sattva] - Atualizado desconto");
+				
+				System.out.println("[Sattva] - Recalculando imposto e financeiro");
+    			TdbHelper.recalculaImpostoEFinanceiro(nuNotaEmp.getValue());
+    			System.out.println("[Sattva] - Recalculo finalizado");
+				
+			}
+			
+		}
+		
+	}
+
 	private void authenticate(BigDecimal codigoUsuario) throws Exception {
 		this.oldAuthInfo = AuthenticationInfo.getCurrentOrNull();
 
@@ -177,10 +343,8 @@ public class SplitPedidos implements ScheduledAction {
 				.findEntityByPrimaryKeyAsVO(DynamicEntityNames.USUARIO, new Object[] { codigoUsuario });
 
 		StringBuffer authID = new StringBuffer();
-		authID.append(System.currentTimeMillis()).append(':').append(usuarioVO.asBigDecimal("CODUSU")).append(':')
-				.append(this.hashCode());
-		this.authInfo = new AuthenticationInfo(usuarioVO.asString("NOMEUSU"), usuarioVO.asBigDecimalOrZero("CODUSU"),
-				usuarioVO.asBigDecimalOrZero("CODGRUPO"), new Integer(authID.toString().hashCode()));
+		authID.append(System.currentTimeMillis()).append(':').append(usuarioVO.asBigDecimal("CODUSU")).append(':').append(this.hashCode());
+		this.authInfo = new AuthenticationInfo(usuarioVO.asString("NOMEUSU"), usuarioVO.asBigDecimalOrZero("CODUSU"),usuarioVO.asBigDecimalOrZero("CODGRUPO"), new Integer(authID.toString().hashCode()));
 		this.authInfo.makeCurrent();
 
 		final ServiceContext sctx = new ServiceContext(null);
@@ -236,7 +400,7 @@ public class SplitPedidos implements ScheduledAction {
 			tgfvarColl.add((DynamicVO) itemPLE.getValueObject());
 		}
 		
-		DynamicVO tgfvarVO = tgfvarDAO.findOne("NUNOTAORIG = ?", nuNotaPreSplit);
+		DynamicVO tgfvarVO = tgfvarDAO.findOne("NUNOTAORIG = ? AND NUNOTAORIG <> NUNOTA", nuNotaPreSplit);
 
 		if (tgfvarVO == null) {
 			return false;
@@ -245,8 +409,7 @@ public class SplitPedidos implements ScheduledAction {
 		return true;
 	}
 
-	private void imprimeSplitFinal(Collection<Split> pedidosSplit, Map<BigDecimal, BigDecimal> listaNroUnicoEmpresa)
-			throws Exception {
+	private void imprimeSplitFinal(Collection<Split> pedidosSplit, Map<BigDecimal, BigDecimal> listaNroUnicoEmpresa) throws Exception {
 		for (Split pedido : pedidosSplit) {
 			for (Map.Entry<BigDecimal, BigDecimal> nuNotaEmp : listaNroUnicoEmpresa.entrySet()) {
 
