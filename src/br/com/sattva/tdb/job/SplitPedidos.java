@@ -132,7 +132,7 @@ public class SplitPedidos implements ScheduledAction {
 
 				if (geraTransferencia) {
 					System.out.println("[Sattva] - Gerando Transferencias - Inicio");
-					Map<String, BigDecimal> nroUnicoTransf = TdbHelper.transfereSaldo6x1(itensTransferencia);
+					Map<String, BigDecimal> nroUnicoTransf = TdbHelper.transfereSaldo6x1(itensTransferencia, nuNotaPreSplit);
 					log += "\n\nNro.Unico.Transferencia Saida..: " + nroUnicoTransf.get("NUNOTATRANSFSAIDA");
 					log += "\nNro.Unico.Transferencia Entrada: " + nroUnicoTransf.get("NUNOTATRANSFENTRADA") + "\n";
 
@@ -154,23 +154,18 @@ public class SplitPedidos implements ScheduledAction {
 				listaNroUnicoEmpresa = TdbHelper.geraLancamentosSplit(pedidoVO, pedidosSplit);
 				System.out.println("[Sattva] - Gerando Lançamentos Splits - Fim");
 
-				System.out.println("[Sattva] - Imprimindo Log - Inicio");
+				
             	imprimeSplitFinal(pedidosSplit, listaNroUnicoEmpresa);
-            	System.out.println("[Sattva] - Imprimindo Log - Fim");
+            	
 				
             	if (vlrDescTot.doubleValue() > 0) {
-            		System.out.println("[Sattva] - Atualizando desconto dos lançamentos splitados - Inicio");
             		atualizaDesconto(listaNroUnicoEmpresa, vlrNota, vlrDescTot, saldoDesconto);                    		
-            		System.out.println("[Sattva] - Atualizando desconto dos lançamentos splitados - Fim");
             	}
 				
-            	System.out.println("[Sattva] - Refazendo os valores dos pedidos - Inicio");
 				refazValoresTotaisPedido(listaNroUnicoEmpresa);
-				System.out.println("[Sattva] - Refazendo os valores dos pedidos - Fim");
 				
-				System.out.println("[Sattva] - Fazendo ligações na TGFVAR - Inicio");
-            	TdbHelper.vinculaTgfvar(listaNroUnicoEmpresa, pedidoVO.asBigDecimal("NUNOTA"));
-            	System.out.println("[Sattva] - Fazendo ligações na TGFVAR - Fim");
+				TdbHelper.vinculaTgfvar(listaNroUnicoEmpresa, pedidoVO.asBigDecimal("NUNOTA"));
+            	
 
 				cabecalhoDAO.prepareToUpdate(pedidoVO)
 				.set("CODTIPOPER", topPreSplit)
@@ -200,6 +195,7 @@ public class SplitPedidos implements ScheduledAction {
 	}
 	
 	private void refazValoresTotaisPedido(Map<BigDecimal, BigDecimal> listaNroUnicoEmpresa) throws Exception {
+		System.out.println("[Sattva] - Refazendo os valores dos pedidos - Inicio");
 		System.out.println("[Sattva] - Refazendo Valores: " + listaNroUnicoEmpresa);
 		
 		for (Map.Entry<BigDecimal, BigDecimal> nuNotaEmp : listaNroUnicoEmpresa.entrySet()) {
@@ -207,10 +203,12 @@ public class SplitPedidos implements ScheduledAction {
 			TdbHelper.recalculaImpostoEFinanceiro(nuNotaEmp.getValue());
 			System.out.println("[Sattva] - Recalculo finalizado");
 		}
-	
+		
+		System.out.println("[Sattva] - Refazendo os valores dos pedidos - Fim");	
 	}
 	
 	private void atualizaDesconto(Map<BigDecimal, BigDecimal> listaNroUnicoEmpresa, BigDecimal vlrNota, BigDecimal vlrDescTot, BigDecimal saldoDesconto2) throws Exception {
+		System.out.println("[Sattva] - Atualizando desconto dos lançamentos splitados - Inicio");
 		System.out.println("[Sattva] - Lista de Nro.Unico p/ desconto: " + listaNroUnicoEmpresa);
 		System.out.println("[Sattva] - Saldo Desconto: " + saldoDesconto);
 		
@@ -291,7 +289,7 @@ public class SplitPedidos implements ScheduledAction {
 			
 		}
 		
-		
+		System.out.println("[Sattva] - Atualizando desconto dos lançamentos splitados - Fim");
 	}
 
 	private void atualizaDesconto(Map<BigDecimal, BigDecimal> listaNroUnicoEmpresa, BigDecimal vlrNota, BigDecimal vlrDescTot) throws Exception {
@@ -410,6 +408,7 @@ public class SplitPedidos implements ScheduledAction {
 	}
 
 	private void imprimeSplitFinal(Collection<Split> pedidosSplit, Map<BigDecimal, BigDecimal> listaNroUnicoEmpresa) throws Exception {
+		System.out.println("[Sattva] - Imprimindo Log - Inicio");
 		for (Split pedido : pedidosSplit) {
 			for (Map.Entry<BigDecimal, BigDecimal> nuNotaEmp : listaNroUnicoEmpresa.entrySet()) {
 
@@ -421,6 +420,7 @@ public class SplitPedidos implements ScheduledAction {
 				}
 			}
 		}
+		System.out.println("[Sattva] - Imprimindo Log - Fim");
 	}
 
 	private void doSplit(String regraPrioridade, Collection<DynamicVO> itensPreSplit, BigDecimal nuNotaPreSplit,

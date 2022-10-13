@@ -8,6 +8,7 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
 
+import com.sankhya.util.BigDecimalUtil;
 import com.sankhya.util.TimeUtils;
 
 import br.com.sankhya.jape.EntityFacade;
@@ -174,9 +175,32 @@ public class TdbHelper {
 			
 			if (codEmp.intValue() != 5 && empresasCabecalho.size() > 1) {
 				trocaInformacoesCab.put("VLRFRETE", BigDecimal.ZERO);
-			} else {
+			
+				//Se for empresa 1, mantem o original
+				String transportadoras = "'VIA PAJUCARA STANDARD'";
+				String bhMetodo = "";
 				
-				String transportadoras = "'CORREIOS'-'CORREIOS PAC'-'CORREIOS SEDEX'";
+				if(pedidoVO.asString("BH_METODO") == null) {
+					
+				} else {
+					bhMetodo = transportadoras.indexOf(pedidoVO.asString("BH_METODO")) > -1 ? "JADLOG PACKAGE" : pedidoVO.asString("BH_METODO");					
+				}
+				
+				BigDecimal codParcTrans = BigDecimal.ZERO;
+				if(bhMetodo!= null) {
+					codParcTrans = localizaTransportadoraByMetodo(bhMetodo);										
+				}
+				
+				System.out.println("[Sattva] - Vlr. Frete: " + pedidoVO.asBigDecimal("VLRFRETE"));
+				trocaInformacoesCab.put("BH_METODO", bhMetodo);
+				trocaInformacoesCab.put("CODPARCTRANSP", codParcTrans);		
+							
+			
+			}
+			
+			if (codEmp.intValue() == 5 && empresasCabecalho.size() > 1) {
+				
+				String transportadoras = "'CORREIOS'-'CORREIOS PAC'-'CORREIOS SEDEX'-'VIA PAJUCARA STANDARD'";
 				String bhMetodo = "";
 				
 				if(pedidoVO.asString("BH_METODO") == null) {
@@ -193,9 +217,58 @@ public class TdbHelper {
 				System.out.println("[Sattva] - Vlr. Frete: " + pedidoVO.asBigDecimal("VLRFRETE"));
 				trocaInformacoesCab.put("VLRFRETE", pedidoVO.asBigDecimal("VLRFRETE"));
 				trocaInformacoesCab.put("BH_METODO", bhMetodo);
-				trocaInformacoesCab.put("CODPARCTRANSP", codParcTrans);
+				trocaInformacoesCab.put("CODPARCTRANSP", codParcTrans);			
+				
 			}
 			
+			if (codEmp.intValue() == 1 && empresasCabecalho.size() == 1) {
+				
+				//Se for empresa 1, mantem o original
+				String transportadoras = "'VIA PAJUCARA STANDARD'";
+				String bhMetodo = "";
+				
+				if(pedidoVO.asString("BH_METODO") == null) {
+					
+				} else {
+					bhMetodo = transportadoras.indexOf(pedidoVO.asString("BH_METODO")) > -1 ? "JADLOG PACKAGE" : pedidoVO.asString("BH_METODO");					
+				}
+				
+				BigDecimal codParcTrans = BigDecimal.ZERO;
+				if(bhMetodo!= null) {
+					codParcTrans = localizaTransportadoraByMetodo(bhMetodo);										
+				}
+				
+				System.out.println("[Sattva] - Vlr. Frete: " + pedidoVO.asBigDecimal("VLRFRETE"));
+//				trocaInformacoesCab.put("VLRFRETE", pedidoVO.asBigDecimal("VLRFRETE"));
+				trocaInformacoesCab.put("VLRFRETE", BigDecimal.ZERO);
+				trocaInformacoesCab.put("BH_METODO", bhMetodo);
+				trocaInformacoesCab.put("CODPARCTRANSP", codParcTrans);		
+							
+			}
+			
+			if (codEmp.intValue() == 5 && empresasCabecalho.size() == 1) {
+				
+				String transportadoras = "'CORREIOS'-'CORREIOS PAC'-'CORREIOS SEDEX'-'VIA PAJUCARA STANDARD'";
+				String bhMetodo = "";
+				
+				if(pedidoVO.asString("BH_METODO") == null) {
+					
+				} else {
+					bhMetodo = transportadoras.indexOf(pedidoVO.asString("BH_METODO")) > -1 ? pedidoVO.asString("BH_METODO") : "JADLOG PACKAGE";					
+				}
+				
+				BigDecimal codParcTrans = BigDecimal.ZERO;
+				if(bhMetodo!= null) {
+					codParcTrans = localizaTransportadoraByMetodo(bhMetodo);										
+				}
+				
+				System.out.println("[Sattva] - Vlr. Frete: " + pedidoVO.asBigDecimal("VLRFRETE"));
+				trocaInformacoesCab.put("VLRFRETE", pedidoVO.asBigDecimal("VLRFRETE"));
+				trocaInformacoesCab.put("BH_METODO", bhMetodo);
+				trocaInformacoesCab.put("CODPARCTRANSP", codParcTrans);			
+				
+			}
+				
 			System.out.println("[Sattva] - trocaInformacoesCab: \n" + trocaInformacoesCab.toString());
 			
 			Map<String, Object> pkNewNuNota = CentralNotasUtils.duplicaRegistro(pedidoVO, "CabecalhoNota", trocaInformacoesCab);
@@ -396,8 +469,8 @@ public static Map<String, BigDecimal> transfereSaldo6x1(Collection<Transferencia
 			itemSaidaVO.setProperty("CODEMP", empresaOrigem);
 			itemSaidaVO.setProperty("CODPROD", item.codProd);
 			itemSaidaVO.setProperty("QTDNEG", item.qtdNeg);
-			itemSaidaVO.setProperty("VLRUNIT", custoSemIcms);
-			itemSaidaVO.setProperty("VLRTOT", custoSemIcms.multiply(item.qtdNeg));
+			itemSaidaVO.setProperty("VLRUNIT", BigDecimalUtil.getRounded(custoSemIcms, 2));
+			itemSaidaVO.setProperty("VLRTOT", BigDecimalUtil.getRounded(custoSemIcms.multiply(item.qtdNeg), 2));
 			itemSaidaVO.setProperty("CODVOL", produtoVO.asString("CODVOL"));
 			itemSaidaVO.setProperty("ATUALESTOQUE", BigDecimal.ONE);
 			itemSaidaVO.setProperty("RESERVA", "S");
@@ -408,8 +481,8 @@ public static Map<String, BigDecimal> transfereSaldo6x1(Collection<Transferencia
 			itemEntradaVO.setProperty("CODEMP", BigDecimal.ONE);
 			itemEntradaVO.setProperty("CODPROD", item.codProd);
 			itemEntradaVO.setProperty("QTDNEG", item.qtdNeg);
-			itemEntradaVO.setProperty("VLRUNIT", custoSemIcms);
-			itemEntradaVO.setProperty("VLRTOT", custoSemIcms.multiply(item.qtdNeg));
+			itemEntradaVO.setProperty("VLRUNIT", BigDecimalUtil.getRounded(custoSemIcms, 2));
+			itemEntradaVO.setProperty("VLRTOT", BigDecimalUtil.getRounded(custoSemIcms.multiply(item.qtdNeg),2));
 			itemEntradaVO.setProperty("CODVOL", produtoVO.asString("CODVOL"));
 			itemEntradaVO.setProperty("ATUALESTOQUE", BigDecimal.ZERO);
 			itemEntradaVO.setProperty("RESERVA", "N");
@@ -422,7 +495,7 @@ public static Map<String, BigDecimal> transfereSaldo6x1(Collection<Transferencia
 		
 		return notasTransferenca;
 	}
-
+/*
 	public static Map<String, BigDecimal> transfereSaldo6x1(Collection<Transferencia> itensTransferencia) throws Exception {
 		
 		Map<String, BigDecimal> notasTransferenca = new HashMap<String, BigDecimal>();
@@ -437,22 +510,23 @@ public static Map<String, BigDecimal> transfereSaldo6x1(Collection<Transferencia
 		BigDecimal nuNotaModeloSaida = buscaNunotaModeloSaida();
 		DynamicVO cabModeloSaidaVO = cabecalhoDAO.findOne("NUNOTA = ?", nuNotaModeloSaida);
 		
-		DynamicVO notaTransferenciaVO = (DynamicVO) dwf.getDefaultValueObjectInstance("CabecalhoNota");
-		notaTransferenciaVO.setProperty("CODEMP", cabModeloSaidaVO.asBigDecimalOrZero("CODEMP"));
-		notaTransferenciaVO.setProperty("CODPARC", cabModeloSaidaVO.asBigDecimalOrZero("CODPARC"));
-		notaTransferenciaVO.setProperty("OBSERVACAO", "Pedido gerado automaticamente para suprimento de estoque na empresa 1");
-		notaTransferenciaVO.setProperty("CODTIPOPER", cabModeloSaidaVO.asBigDecimalOrZero("CODTIPOPER"));
-		notaTransferenciaVO.setProperty("DHTIPOPER", cabModeloSaidaVO.asTimestamp("DHTIPOPER"));				
-		notaTransferenciaVO.setProperty("CODTIPVENDA", cabModeloSaidaVO.asBigDecimalOrZero("CODTIPVENDA"));
-		notaTransferenciaVO.setProperty("DHTIPVENDA", cabModeloSaidaVO.asTimestamp("DHTIPVENDA"));
-		notaTransferenciaVO.setProperty("CODNAT", cabModeloSaidaVO.asBigDecimalOrZero("CODNAT"));
-		notaTransferenciaVO.setProperty("CODCENCUS", cabModeloSaidaVO.asBigDecimalOrZero("CODCENCUS"));
-		notaTransferenciaVO.setProperty("DTNEG", TimeUtils.getNow());
-		notaTransferenciaVO.setProperty("DTENTSAI", TimeUtils.getNow());
-		notaTransferenciaVO.setProperty("DTFATUR", TimeUtils.getNow());
-		notaTransferenciaVO.setProperty("NUMNOTA", BigDecimal.ZERO);
-		notaTransferenciaVO.setProperty("CIF_FOB", cabModeloSaidaVO.asString("CIF_FOB"));
-		dwf.createEntity("CabecalhoNota", (EntityVO) notaTransferenciaVO);
+		DynamicVO pedidoVendaTransfVO = (DynamicVO) dwf.getDefaultValueObjectInstance("CabecalhoNota");
+		pedidoVendaTransfVO.setProperty("CODEMP", cabModeloSaidaVO.asBigDecimalOrZero("CODEMP"));
+		pedidoVendaTransfVO.setProperty("CODPARC", cabModeloSaidaVO.asBigDecimalOrZero("CODPARC"));
+		pedidoVendaTransfVO.setProperty("OBSERVACAO", "Pedido gerado automaticamente para suprimento de estoque na empresa 1");
+		pedidoVendaTransfVO.setProperty("CODTIPOPER", cabModeloSaidaVO.asBigDecimalOrZero("CODTIPOPER"));
+		pedidoVendaTransfVO.setProperty("DHTIPOPER", cabModeloSaidaVO.asTimestamp("DHTIPOPER"));				
+		pedidoVendaTransfVO.setProperty("CODTIPVENDA", cabModeloSaidaVO.asBigDecimalOrZero("CODTIPVENDA"));
+		pedidoVendaTransfVO.setProperty("DHTIPVENDA", cabModeloSaidaVO.asTimestamp("DHTIPVENDA"));
+		pedidoVendaTransfVO.setProperty("CODNAT", cabModeloSaidaVO.asBigDecimalOrZero("CODNAT"));
+		pedidoVendaTransfVO.setProperty("CODCENCUS", cabModeloSaidaVO.asBigDecimalOrZero("CODCENCUS"));
+		pedidoVendaTransfVO.setProperty("DTNEG", TimeUtils.getNow());
+		pedidoVendaTransfVO.setProperty("DTENTSAI", TimeUtils.getNow());
+		pedidoVendaTransfVO.setProperty("DTFATUR", TimeUtils.getNow());
+		pedidoVendaTransfVO.setProperty("NUMNOTA", BigDecimal.ZERO);
+		pedidoVendaTransfVO.setProperty("CIF_FOB", cabModeloSaidaVO.asString("CIF_FOB"));
+		pedidoVendaTransfVO.setProperty("AD_NUNOTAORIG", null);
+		dwf.createEntity("CabecalhoNota", (EntityVO) pedidoVendaTransfVO);
 		
 		BigDecimal nuNotaModeloEntrada = buscaNunotaModeloEntrada();
 		DynamicVO cabModeloEntradaVO = cabecalhoDAO.findOne("NUNOTA = ?", nuNotaModeloEntrada);
@@ -471,10 +545,11 @@ public static Map<String, BigDecimal> transfereSaldo6x1(Collection<Transferencia
 		pedidoCompraTransfVO.setProperty("DTENTSAI", TimeUtils.getNow());
 		pedidoCompraTransfVO.setProperty("DTFATUR", TimeUtils.getNow());
 		pedidoCompraTransfVO.setProperty("NUMNOTA", BigDecimal.ZERO);
+		pedidoCompraTransfVO.setProperty("AD_NUNOTAORIG", null);
 		dwf.createEntity("CabecalhoNota", (EntityVO) pedidoCompraTransfVO);
 		
 		BigDecimal nuNotaTransfEntrada = pedidoCompraTransfVO.asBigDecimal("NUNOTA");
-		BigDecimal nuNotaTransfSaida = notaTransferenciaVO.asBigDecimal("NUNOTA");
+		BigDecimal nuNotaTransfSaida = pedidoVendaTransfVO.asBigDecimal("NUNOTA");
 		notasTransferenca.put("NUNOTATRANSFENTRADA", nuNotaTransfEntrada);
 		notasTransferenca.put("NUNOTATRANSFSAIDA", nuNotaTransfSaida);
 		
@@ -514,7 +589,7 @@ public static Map<String, BigDecimal> transfereSaldo6x1(Collection<Transferencia
 		
 		return notasTransferenca;
 	}
-	
+	*/
 
 	public static Timestamp getDhTipOper(BigDecimal codTipOper) throws Exception {
 		EntityFacade dwf = EntityFacadeFactory.getDWFFacade();
@@ -839,11 +914,10 @@ public static Map<String, BigDecimal> transfereSaldo6x1(Collection<Transferencia
 	}
 
 	public static void vinculaTgfvar(Map<BigDecimal, BigDecimal> listaNroUnicoEmpresa, BigDecimal nuNotaOriginal) throws Exception {
+		System.out.println("[Sattva] - Fazendo ligações na TGFVAR - Inicio");
 		JapeWrapper tgfvarDAO = JapeFactory.dao("CompraVendavariosPedido");
 		JapeWrapper itemDAO = JapeFactory.dao("ItemNota");
-		
-		System.out.println("[SattvaLog9] ");
-		
+				
 		for (Map.Entry<BigDecimal, BigDecimal> nroUnico : listaNroUnicoEmpresa.entrySet()) {
 			
 			/*
@@ -878,6 +952,6 @@ public static Map<String, BigDecimal> transfereSaldo6x1(Collection<Transferencia
 			}
 			
 		}
-		
+		System.out.println("[Sattva] - Fazendo ligações na TGFVAR - Fim");
 	}
 }

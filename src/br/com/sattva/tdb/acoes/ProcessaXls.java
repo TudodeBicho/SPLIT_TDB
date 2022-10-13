@@ -48,6 +48,8 @@ public class ProcessaXls implements AcaoRotinaJava {
             
             JapeWrapper konciliDAO = JapeFactory.dao("AD_REPASSESKONCILICAB");
             
+            String erros = "#";
+            
             for(int i = 1; i < linhas; ++i) {
                 
                 Cell dataConciliacao = sheet.getCell(0, i);
@@ -55,20 +57,25 @@ public class ProcessaXls implements AcaoRotinaJava {
                 
                 if (!dataConciliacao.getContents().isEmpty() && !nroConciliacao.getContents().isEmpty()) {
                 	
-                	Collection<DynamicVO> konciliColVO = konciliDAO.find("NROCONCILIACAO = ?", nroConciliacao.getContents());
-                	
+                	Collection<DynamicVO> konciliColVO = konciliDAO.find("NROCONCILIACAO = ? AND DATABAIXACONC IS NULL", nroConciliacao.getContents());
+//                	System.out.println("[Sattva] - Colecao Conciliacao: " + konciliColVO);
                 	if (konciliColVO == null) {
                 		continue;
                 	}
                 	
                 	for (DynamicVO konciliVO : konciliColVO) {
-                		if (konciliVO.asTimestamp("DATABAIXACONC") != null) {
-                			continue;
-                		}
-                		konciliDAO.prepareToUpdate(konciliVO).set("DATABAIXACONC", TimeUtils.toTimestamp(dataConciliacao.getContents())).update();                		
+//                		System.out.println("[Sattva] - Koncili: " +  konciliVO.asString("NROPEDIDO") + " / Não possui data");
+                		try {
+                			konciliDAO.prepareToUpdate(konciliVO).set("DATABAIXACONC", TimeUtils.toTimestamp(dataConciliacao.getContents())).update();                									
+						} catch (Exception e) {
+							erros += e.toString()+"\n\n";
+						}
                 	}
                 }
             }
+            
+            System.out.println("[Sattva] - Koncili: ERROS" + erros);
+            contextoAcao.getLinhas()[0].setCampo("OBSERVACAO", erros);
 
             contextoAcao.setMensagemRetorno("Arquivo processado com sucesso!");
             
