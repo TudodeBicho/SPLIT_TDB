@@ -411,6 +411,8 @@ public static Map<String, BigDecimal> transfereSaldo6x1(Collection<Transferencia
 		final BigDecimal empresaOrigem = new BigDecimal("6");
 		
 		validaParametros();
+		
+		JapeSessionContext.putProperty("usuario_logado", BigDecimal.ZERO);
 
 		BigDecimal nuNotaModeloSaida = buscaNunotaModeloSaida();
 		DynamicVO cabModeloSaidaVO = cabecalhoDAO.findOne("NUNOTA = ?", nuNotaModeloSaida);
