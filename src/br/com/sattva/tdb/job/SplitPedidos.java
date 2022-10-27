@@ -56,31 +56,25 @@ public class SplitPedidos implements ScheduledAction {
 			sqlPedidosAptos.loadSql(getClass(), "qryPedidosAptos.sql");
 			sqlPedidosAptos.setNamedParameter("CODTIPOPER", topPreSplit);
 			
-			System.out.println("[Sattva] - 2");
-
 			ResultSet rs = sqlPedidosAptos.executeQuery();
 			while (rs.next()) {
-				PersistentLocalEntity registroPLE = dwf.findEntityByPrimaryKey("CabecalhoNota", rs.getBigDecimal("NUNOTA"));
-				DynamicVO pedidoVO = (DynamicVO) registroPLE.getValueObject();
-				
 				BigDecimal vlrDescTot = rs.getBigDecimal("VLRDESCTOT");
 				BigDecimal vlrNota = rs.getBigDecimal("VLRNOTA").add(rs.getBigDecimal("VLRDESCTOT"));
-				
 				log = "";
-				System.out.println("[Sattva] - 2.1");
 				regraPrioridade = "";
 				geraTransferencia = false;
+
+				PersistentLocalEntity registroPLE = dwf.findEntityByPrimaryKey("CabecalhoNota", rs.getBigDecimal("NUNOTA"));
+				DynamicVO pedidoVO = (DynamicVO) registroPLE.getValueObject();				
 				BigDecimal nuNotaPreSplit = pedidoVO.asBigDecimal("NUNOTA");
-				System.out.println("[Sattva] - 2.2");
 				BigDecimal codCidadeDestino = pedidoVO.asBigDecimal("CODCIDDESTINO");
-				System.out.println("[Sattva] - 2.3");
+				
 				String nomeCidadeDestino = buscaCidadeDestino(codCidadeDestino);
+
 				Collection<Transferencia> itensTransferencia = new ArrayList<Transferencia>();
 				Collection<Split> splitPedidos = new ArrayList<Split>();
 
 				boolean pedidoJaFaturado = verificaPedidoFaturado(nuNotaPreSplit);
-				
-				System.out.println("[Sattva] - 3");
 				
 				if (pedidoJaFaturado) {
 					log = "Esse pedido ja foi faturado. Verificar documentos relacionados";
@@ -100,7 +94,7 @@ public class SplitPedidos implements ScheduledAction {
 					log += "Regra Prioridade: Empresa 1, Empresa 6 e Empresa 5";
 					regraPrioridade = "165";
 				} else {
-					if (codCidadeDestino == null && pedidoVO.asString("BH_METODO").equalsIgnoreCase("FROTA INTERNA STANDART")) {
+					if (codCidadeDestino == null && pedidoVO.asString("BH_METODO").equalsIgnoreCase("FROTA INTERNA STANDARD")) {
 						log += "Regra Prioridade: Empresa 1, Empresa 6 e Empresa 5";
 						regraPrioridade = "165";
 					} else {
@@ -108,9 +102,6 @@ public class SplitPedidos implements ScheduledAction {
 						regraPrioridade = "516";
 					}
 				}
-
-
-				System.out.println("[Sattva] - 4");
 				
 				FinderWrapper finderItensPre = new FinderWrapper("ItemNota", "this.NUNOTA = ?", new Object[] {nuNotaPreSplit});
 				Collection<PersistentLocalEntity> colletionItensPrePLE = dwf.findByDynamicFinder(finderItensPre);
@@ -136,10 +127,8 @@ public class SplitPedidos implements ScheduledAction {
 					log += "\n\nNro.Unico.Transferencia Saida..: " + nroUnicoTransf.get("NUNOTATRANSFSAIDA");
 					log += "\nNro.Unico.Transferencia Entrada: " + nroUnicoTransf.get("NUNOTATRANSFENTRADA") + "\n";
 
-					System.out.println("[Sattva] - Recalculando transferencia");
 					TdbHelper.recalculaImpostoEFinanceiro(nroUnicoTransf.get("NUNOTATRANSFSAIDA"));
 					TdbHelper.recalculaImpostoEFinanceiro(nroUnicoTransf.get("NUNOTATRANSFENTRADA"));
-					System.out.println("[Sattva] - Fim - Recalculando transferencia");
 					
 					System.out.println("[Sattva] - Gerando Transferencias - Fim");
 				}
@@ -149,14 +138,10 @@ public class SplitPedidos implements ScheduledAction {
 				Map<BigDecimal, BigDecimal> listaNroUnicoEmpresa = new HashMap<BigDecimal, BigDecimal>();
 				
 				authenticate(BigDecimal.ZERO);
-
-				System.out.println("[Sattva] - Gerando Lançamentos Splits - Inicio");
-				listaNroUnicoEmpresa = TdbHelper.geraLancamentosSplit(pedidoVO, pedidosSplit);
-				System.out.println("[Sattva] - Gerando Lançamentos Splits - Fim");
-
 				
-            	imprimeSplitFinal(pedidosSplit, listaNroUnicoEmpresa);
-            	
+				listaNroUnicoEmpresa = TdbHelper.geraLancamentosSplit(pedidoVO, pedidosSplit);
+				
+				imprimeSplitFinal(pedidosSplit, listaNroUnicoEmpresa);            	
 				
             	if (vlrDescTot.doubleValue() > 0) {
             		atualizaDesconto(listaNroUnicoEmpresa, vlrNota, vlrDescTot, saldoDesconto);                    		
@@ -166,7 +151,6 @@ public class SplitPedidos implements ScheduledAction {
 				
 				TdbHelper.vinculaTgfvar(listaNroUnicoEmpresa, pedidoVO.asBigDecimal("NUNOTA"));
             	
-
 				cabecalhoDAO.prepareToUpdate(pedidoVO)
 				.set("CODTIPOPER", topPreSplit)
 				.set("DHTIPOPER", TdbHelper.getDhTipOper(topPreSplit))
@@ -182,6 +166,7 @@ public class SplitPedidos implements ScheduledAction {
 			}
 			
 			System.out.println("[Sattva] - Proximo pedido... alterando variavel para zero.");
+			
 			saldoDesconto = BigDecimal.ZERO;
 			
 			System.out.println("[Sattva] - Pos loop");

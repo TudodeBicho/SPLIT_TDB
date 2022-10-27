@@ -59,7 +59,11 @@ public class MudaNatDevCompra implements EventoProgramavelJava {
 			JapeWrapper topDAO = JapeFactory.dao(DynamicEntityNames.TIPO_OPERACAO);
 			DynamicVO topVO = topDAO.findOne("CODTIPOPER = ? AND DHALTER = ?", codTipOper, dhTipOper);
 			
-			if (!topVO.asString("TIPMOV").equals("E")) {
+			if (topVO == null) {
+				return;
+			}
+			
+			if (!"E".equals(topVO.asString("TIPMOV"))) {
 				return;
 			}
 			

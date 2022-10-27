@@ -105,7 +105,7 @@ public class SplitPedidosAcaoII implements AcaoRotinaJava {
 							log += "Regra Prioridade: Empresa 1, Empresa 6 e Empresa 5";
 							regraPrioridade = "165";
 						} else {
-							if (codCidadeDestino == null && pedidoVO.asString("BH_METODO").equalsIgnoreCase("FROTA INTERNA STANDART")) {
+							if (codCidadeDestino == null && pedidoVO.asString("BH_METODO").equalsIgnoreCase("FROTA INTERNA STANDARD")) {
 								log += "Regra Prioridade: Empresa 1, Empresa 6 e Empresa 5";
 								regraPrioridade = "165";
 							} else {
@@ -113,15 +113,7 @@ public class SplitPedidosAcaoII implements AcaoRotinaJava {
 								regraPrioridade = "516";
 							}
 						}
-/*
-						if (codCidadeDestino != null && "4798-2475".indexOf(codCidadeDestino.toString()) > -1) {
-							log += "Regra Prioridade: Empresa 1, Empresa 6 e Empresa 5";
-							regraPrioridade = "165";
-						} else {
-							log += "Regra Prioridade: Empresa 5, Empresa 1 e Empresa 6";
-							regraPrioridade = "516";
-						}
-*/
+
 						Collection<DynamicVO> itensPreSplit = itemDAO.find("NUNOTA = ?", nuNotaPreSplit);
 						log += "\nNroUnico Pre Split: " + nuNotaPreSplit;
 						log += "\nBH_CODEMKT: " + pedidoVO.asString("BH_CODMKT");

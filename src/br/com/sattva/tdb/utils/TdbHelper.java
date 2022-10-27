@@ -158,7 +158,7 @@ public class TdbHelper {
 	}
 	
 	public static Map<BigDecimal, BigDecimal> geraLancamentosSplit(DynamicVO pedidoVO, Collection<Split> pedidosSplit) throws Exception {
-
+		System.out.println("[Sattva] - Gerando Lançamentos Splits - Inicio");
 		ArrayList<BigDecimal> nroUnicoNovosPedidos = new ArrayList<BigDecimal>();
 		ArrayList<BigDecimal> empresasCabecalho = new ArrayList<BigDecimal>();
 		Map<BigDecimal, BigDecimal> nuNotaCodEmp = new HashMap<BigDecimal, BigDecimal>();
@@ -298,6 +298,7 @@ public class TdbHelper {
 			System.out.println("[Sattva] - Recalculo finalizado");
 		}
 		*/
+		System.out.println("[Sattva] - Gerando Lançamentos Splits - Fim");
 		return nuNotaCodEmp;
 		
 	} 
@@ -312,6 +313,7 @@ public class TdbHelper {
 	}
 
 	public static void recalculaImpostoEFinanceiro(BigDecimal nroUnico) throws Exception {
+		System.out.println("[Sattva] - Recalculando transferencia");
 		ImpostosHelpper ih = new ImpostosHelpper();
 		ih.setForcarRecalculo(true);
 		ih.calcularImpostos(nroUnico);
@@ -319,7 +321,7 @@ public class TdbHelper {
 		CentralFinanceiro financeiro = new CentralFinanceiro();	
 		financeiro.inicializaNota(nroUnico);
 		financeiro.refazerFinanceiro();
-		
+		System.out.println("[Sattva] - Fim - Recalculando transferencia");
 	}
 
 	private static void vinculaTgfvar(ArrayList<BigDecimal> nroUnicoNovosPedidos, BigDecimal nuNotaOriginal) throws Exception {
