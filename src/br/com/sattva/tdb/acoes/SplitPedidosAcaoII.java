@@ -45,6 +45,8 @@ public class SplitPedidosAcaoII implements AcaoRotinaJava {
 
 		String nuNotaString = arg0.getParam("NUNOTA") + "";
 		final BigDecimal nuNota = new BigDecimal(nuNotaString);
+		
+		System.out.println("=============================== iniciando job split ===============================");
 
 		SessionHandle hnd = null;
 
@@ -66,6 +68,7 @@ public class SplitPedidosAcaoII implements AcaoRotinaJava {
 					Collection<DynamicVO> pedidosValidos = cabecalhoDAO.find(filtroPedidosAptos);
 					for (DynamicVO pedidoVO : pedidosValidos) {
 						
+						System.out.println("[Sattva] - Entrando no for - Pedido: " + nuNota);
 						
 						BigDecimal vlrDescTotCab = pedidoVO.asBigDecimal("VLRDESCTOT");
 						BigDecimal vlrDescTotItem = pedidoVO.asBigDecimal("VLRDESCTOTITEM");
@@ -86,6 +89,7 @@ public class SplitPedidosAcaoII implements AcaoRotinaJava {
 						boolean pedidoJaFaturado = verificaPedidoFaturado(nuNotaPreSplit);
 						
 						if (pedidoJaFaturado) {
+							System.out.println("[Sattva] - Esse pedido já foi faturado.");
 							log = "Esse pedido ja foi faturado. Verificar documentos relacionados";
 							statusProcessamento = "E";
 							logDAO.create()
@@ -442,11 +446,6 @@ public class SplitPedidosAcaoII implements AcaoRotinaJava {
 					return saldo.subtract(estDisponivel);
 				}
 
-//				private Object disponibilidaDeAtendimento(BigDecimal saldo, BigDecimal estDisponivelEmp1) {
-//					// TODO Auto-generated method stub
-//					return null;
-//				}
-
 				private BigDecimal verificaSaldoEstoqueAgrupando(BigDecimal codEmp, BigDecimal codProd) throws Exception {
 					EntityFacade dwf = EntityFacadeFactory.getDWFFacade();
 					NativeSql sqlEstoqueDisponivel = new NativeSql(dwf.getJdbcWrapper());
@@ -469,6 +468,7 @@ public class SplitPedidosAcaoII implements AcaoRotinaJava {
 		} 
 			finally {
 			JapeSession.close(hnd);
+			System.out.println("=============================== Finalizando job split ===============================");
 		}
 		
 		arg0.setMensagemRetorno(mensagemRetorno);

@@ -48,7 +48,8 @@ public class MudaNatDevCompra implements EventoProgramavelJava {
 		BigDecimal codTipOper = financeiroVO.asBigDecimal("CODTIPOPER");
 		Timestamp dhTipOper = financeiroVO.asTimestamp("DHTIPOPER");
 		String origem = financeiroVO.asString("ORIGEM");
-
+		BigDecimal codNat = financeiroVO.asBigDecimal("CODNAT") == null ? BigDecimal.ONE : financeiroVO.asBigDecimal("CODNAT");
+		
 		if (origem.equals("E")) {
 			BigDecimal nuNota = financeiroVO.asBigDecimal("NUNOTA");
 			
@@ -63,24 +64,49 @@ public class MudaNatDevCompra implements EventoProgramavelJava {
 				return;
 			}
 			
-			if (!"E".equals(topVO.asString("TIPMOV"))) {
-				return;
-			}
-			
-			if (topVO.asString("AD_USANATPADGLOBDEV") == null) {
-				return;
-			}
+			if ("E-D".indexOf(topVO.asString("TIPMOV")) > -1) {
+				/* Devolução de Compra */
+				if ("E".equals(topVO.asString("TIPMOV"))) {
+					
+					if (topVO.asString("AD_USANATPADGLOBDEV") == null) {
+						return;
+					}
 
-			if (topVO.asString("AD_USANATPADGLOBDEV").equals("S")) {
-				JapeWrapper paramDAO = JapeFactory.dao("ParametroSistema");
-				DynamicVO paramVO = paramDAO.findOne("CHAVE = 'NATPADDEVCPA'");
-				BigDecimal newCodNat = paramVO.asBigDecimal("INTEIRO");
+					if (topVO.asString("AD_USANATPADGLOBDEV").equals("S")) {
+						JapeWrapper paramDAO = JapeFactory.dao("ParametroSistema");
+						DynamicVO paramDevCompraVO = paramDAO.findOne("CHAVE = 'NATPADDEVCPA'");
+						BigDecimal newCodNat = paramDevCompraVO.asBigDecimal("INTEIRO");
 
-				financeiroVO.setProperty("CODNAT", newCodNat);
+						financeiroVO.setProperty("CODNAT", newCodNat);
 
-				JapeWrapper cabDAO = JapeFactory.dao("CabecalhoNota");
-				cabDAO.prepareToUpdateByPK(nuNota).set("CODNAT", newCodNat).update();
+						JapeWrapper cabDAO = JapeFactory.dao("CabecalhoNota");
+						cabDAO.prepareToUpdateByPK(nuNota).set("CODNAT", newCodNat).update();
 
+					}
+					
+				} else {
+					/* Devolução de Venda */
+					if (topVO.asString("AD_USANATPADGLOBDEVVENDA") == null) {
+						return;
+					}
+					
+					if ("102102006 - 102102008 - 102102007".indexOf(codNat.toString()) > -1) {
+						
+					} else {
+						
+						if (topVO.asString("AD_USANATPADGLOBDEVVENDA").equals("S")) {
+							JapeWrapper paramDAO = JapeFactory.dao("ParametroSistema");
+							DynamicVO paramDevVendaVO = paramDAO.findOne("CHAVE = 'NATPADDEV'");
+							BigDecimal newCodNat = paramDevVendaVO.asBigDecimal("INTEIRO");
+
+							financeiroVO.setProperty("CODNAT", newCodNat);
+
+							JapeWrapper cabDAO = JapeFactory.dao("CabecalhoNota");
+							cabDAO.prepareToUpdateByPK(nuNota).set("CODNAT", newCodNat).update();
+
+						}
+					}
+				}
 			}
 		}
 	}
