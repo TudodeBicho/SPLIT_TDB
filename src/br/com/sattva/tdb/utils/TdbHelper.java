@@ -240,7 +240,7 @@ public class TdbHelper {
 				
 				System.out.println("[Sattva] - Vlr. Frete: " + pedidoVO.asBigDecimal("VLRFRETE"));
 //				trocaInformacoesCab.put("VLRFRETE", pedidoVO.asBigDecimal("VLRFRETE"));
-				trocaInformacoesCab.put("VLRFRETE", BigDecimal.ZERO);
+//				trocaInformacoesCab.put("VLRFRETE", BigDecimal.ZERO);
 				trocaInformacoesCab.put("BH_METODO", bhMetodo);
 				trocaInformacoesCab.put("CODPARCTRANSP", codParcTrans);		
 							

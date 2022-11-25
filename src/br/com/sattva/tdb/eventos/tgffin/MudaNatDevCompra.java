@@ -9,6 +9,7 @@ import br.com.sankhya.jape.dao.JdbcWrapper;
 import br.com.sankhya.jape.event.PersistenceEvent;
 import br.com.sankhya.jape.event.TransactionContext;
 import br.com.sankhya.jape.sql.NativeSql;
+import br.com.sankhya.jape.util.JapeSessionContext;
 import br.com.sankhya.jape.vo.DynamicVO;
 import br.com.sankhya.jape.wrapper.JapeFactory;
 import br.com.sankhya.jape.wrapper.JapeWrapper;
@@ -89,6 +90,7 @@ public class MudaNatDevCompra implements EventoProgramavelJava {
 					if (topVO.asString("AD_USANATPADGLOBDEVVENDA") == null) {
 						return;
 					}
+					
 					
 					if ("102102006 - 102102008 - 102102007".indexOf(codNat.toString()) > -1) {
 						
