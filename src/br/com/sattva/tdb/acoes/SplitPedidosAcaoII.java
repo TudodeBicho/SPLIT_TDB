@@ -39,7 +39,10 @@ public class SplitPedidosAcaoII implements AcaoRotinaJava {
 	JapeWrapper logDAO = JapeFactory.dao("AD_LOGSPLIT");
 	BigDecimal saldoDesconto = BigDecimal.ZERO;
 	String mensagemRetorno = "Opa!!!";
+	String abortaPedidoPorFaltaDeEstoque = "N";
+	BigDecimal codEmpOriginal = null;
 
+	
 	@Override
 	public void doAction(ContextoAcao arg0) throws Exception {
 
@@ -58,7 +61,6 @@ public class SplitPedidosAcaoII implements AcaoRotinaJava {
 					BigDecimal topPreSplit = TdbHelper.buscaTopPreSplit();
 
 					String filtroPedidosAptos = "PENDENTE = 'S' " + "AND CODVEND = 14 "
-//							+ "/*AND CODCIDDESTINO NOT IN (4798, 2475)*/ " + "AND CODTIPOPER = 3102 "
 							+ "/*AND CODCIDDESTINO NOT IN (4798, 2475)*/ " + "AND CODTIPOPER = " + topPreSplit
 							+ "AND NOT EXISTS (SELECT 1 FROM TGFVAR V WHERE TGFCAB.NUNOTA = V.NUNOTAORIG) "
 							+ "AND DTNEG >= '02/02/2022' AND CODEMP = 1";
@@ -72,8 +74,10 @@ public class SplitPedidosAcaoII implements AcaoRotinaJava {
 						
 						BigDecimal vlrDescTotCab = pedidoVO.asBigDecimal("VLRDESCTOT");
 						BigDecimal vlrDescTotItem = pedidoVO.asBigDecimal("VLRDESCTOTITEM");
-						BigDecimal vlrFrete = pedidoVO.asBigDecimal("VLRFRETE");
+//						BigDecimal vlrFrete = pedidoVO.asBigDecimal("VLRFRETE");
 						BigDecimal vlrNota = pedidoVO.asBigDecimal("VLRNOTA").add(pedidoVO.asBigDecimal("VLRDESCTOT"));
+						
+						codEmpOriginal = pedidoVO.asBigDecimal("CODEMP");
 						
 						BigDecimal vlrDescTot = vlrDescTotItem.add(vlrDescTotCab);
 						
@@ -97,6 +101,7 @@ public class SplitPedidosAcaoII implements AcaoRotinaJava {
 				        	.set("NUNOTAORIG", pedidoVO.asBigDecimal("NUNOTA"))
 				        	.set("DHINCLUSAO", TimeUtils.getNow())
 				        	.set("STATUSPROCESSAMENTO", statusProcessamento)
+				        	.set("MSGSTATUS", "Pedido já faturado")
 				        	.save();
 							
 							continue;
@@ -126,6 +131,20 @@ public class SplitPedidosAcaoII implements AcaoRotinaJava {
 						System.out.println("[Sattva] - Chegou aqui...");
 						
 						doSplit(regraPrioridade, itensPreSplit, nuNotaPreSplit, itensTransferencia, splitPedidos);
+						
+						/* Bruno tinha me passado essa regra no dia 07/12, porem Andressa disse que essa regra não existe. Trecho comentado no dia 08/12						
+						if ("S".equals(abortaPedidoPorFaltaDeEstoque)) {
+							log += "\nPedido foi desconsiderado por falta de estoque de itens.";
+							abortaPedidoPorFaltaDeEstoque = "N";
+							statusProcessamento = "E";
+							logDAO.create().set("DESCRICAO", log.toCharArray())
+									.set("NUNOTAORIG", pedidoVO.asBigDecimal("NUNOTA"))
+									.set("DHINCLUSAO", TimeUtils.getNow())
+									.set("STATUSPROCESSAMENTO", statusProcessamento)
+									.save();
+							continue;
+						}
+						*/
 						
 						if(geraTransferencia) {
 							System.out.println("[Sattva] - Gerando Transferencias - Inicio");
@@ -195,6 +214,7 @@ public class SplitPedidosAcaoII implements AcaoRotinaJava {
 			        	.set("STATUSPROCESSAMENTO", statusProcessamento)
 			        	.save();
 
+						abortaPedidoPorFaltaDeEstoque = "N";
 						
 					}
 					
@@ -219,82 +239,89 @@ public class SplitPedidosAcaoII implements AcaoRotinaJava {
 					System.out.println("[Sattva] - Saldo Desconto: " + saldoDesconto);
 					
 					BigDecimal vlrDesconto = BigDecimal.ZERO;	
-					
-					for (Map.Entry<BigDecimal, BigDecimal> nuNotaEmp : listaNroUnicoEmpresa.entrySet()) {
+
+					if (listaNroUnicoEmpresa.size() == 1) {
+						vlrDesconto = vlrDescTot;
+					} else {
 						
-						if (vlrDesconto.doubleValue() > 0) {
+						for (Map.Entry<BigDecimal, BigDecimal> nuNotaEmp : listaNroUnicoEmpresa.entrySet()) {
 							
-							System.out.println("[Sattva] - Saldo do desconto > 0... utilizando a regra de acumulado...");
-							System.out.println("[Sattva] - vlrDescTot: " + vlrDescTot + ", saldoDesconto: " + saldoDesconto);
-							
-							vlrDesconto = vlrDescTot.subtract(vlrDesconto);
-							
-							cabecalhoDAO.prepareToUpdateByPK(nuNotaEmp.getValue()).set("VLRDESCTOT", vlrDesconto).update();
-							
-							/*
-							System.out.println("[Sattva] - Recalculando imposto e financeiro");
-	            			TdbHelper.recalculaImpostoEFinanceiro(nuNotaEmp.getValue());
-	            			System.out.println("[Sattva] - Recalculo finalizado");
-	            			*/
-	            			
-						} else {
-							
-							EntityFacade dwf = EntityFacadeFactory.getDWFFacade();
-							NativeSql qrySomaItens = new NativeSql(dwf.getJdbcWrapper());
-							qrySomaItens.appendSql("SELECT "
-									+ "SUM(ITE.VLRTOT) AS TOTAL"
-									+ ", CAB.VLRFRETE "
-									+ ", SUM(ITE.VLRTOT) * VCAB.INDITENS AS TOTAL_PROP "
-									+ "FROM TGFITE ITE "
-									+ "JOIN TGFCAB CAB ON ITE.NUNOTA = CAB.NUNOTA "
-									+ "JOIN VGFCAB VCAB ON CAB.NUNOTA = VCAB.NUNOTA "
-									+ "WHERE ITE.NUNOTA = :NUNOTA AND ITE.USOPROD <> 'D' "
-									+ "GROUP BY CAB.VLRFRETE, VCAB.INDITENS");
-							qrySomaItens.setNamedParameter("NUNOTA", nuNotaEmp.getValue());
-							
-							ResultSet rs = qrySomaItens.executeQuery();
-							if (rs.next()) {
+							if (vlrDesconto.doubleValue() > 0) {
 								
-								if (rs.getBigDecimal(1).doubleValue() > vlrNota.doubleValue()) {
-									// entrando aqui significa que o desconto ja foi rateado para os itens
-									vlrDesconto = BigDecimalUtil.getRounded(((rs.getBigDecimal(1).add(rs.getBigDecimal(2))).multiply(vlrDescTot)).divide((vlrNota.add(vlrDescTot)),10,5),2);	
-									
-									System.out.println("[Sattva] - #Memoria Calculo Desconto: Total Itens: " 
-											+ rs.getBigDecimal(1) 
-											+ ", Vlr Frete: " 
-											+ rs.getBigDecimal(2)
-											+ ", Desconto Total: " + vlrDescTot + ", Valor do Pedido: " +  vlrNota.add(vlrDescTot));
-									System.out.println("[Sattva] - Valor do desconto proporcional para a nota " + nuNotaEmp.getValue() + ": " + vlrDesconto);
-									
-									
-									
-								} else {
-									vlrDesconto = BigDecimalUtil.getRounded(((rs.getBigDecimal(1).add(rs.getBigDecimal(2))).multiply(vlrDescTot)).divide(vlrNota,10,5),2);
-									
-									System.out.println("[Sattva] - Memoria Calculo Desconto: Total Itens: " 
-											+ rs.getBigDecimal(1) 
-											+ ", Vlr Frete: " 
-											+ rs.getBigDecimal(2)
-											+ ", Desconto Total: " + vlrDescTot + ", Valor do Pedido: " +  vlrNota);
-									System.out.println("[Sattva] - Valor do desconto proporcional para a nota " + nuNotaEmp.getValue() + ": " + vlrDesconto);
-									
-								}
+								System.out.println("[Sattva] - Saldo do desconto > 0... utilizando a regra de acumulado...");
+								System.out.println("[Sattva] - vlrDescTot: " + vlrDescTot + ", saldoDesconto: " + saldoDesconto);
+								
+								vlrDesconto = vlrDescTot.subtract(vlrDesconto);
 								
 								cabecalhoDAO.prepareToUpdateByPK(nuNotaEmp.getValue()).set("VLRDESCTOT", vlrDesconto).update();
-								
-								System.out.println("[Sattva] - Atualizado desconto");
 								
 								/*
 								System.out.println("[Sattva] - Recalculando imposto e financeiro");
 		            			TdbHelper.recalculaImpostoEFinanceiro(nuNotaEmp.getValue());
 		            			System.out.println("[Sattva] - Recalculo finalizado");
 		            			*/
+		            			
+							} else {
 								
+								EntityFacade dwf = EntityFacadeFactory.getDWFFacade();
+								NativeSql qrySomaItens = new NativeSql(dwf.getJdbcWrapper());
+								qrySomaItens.appendSql("SELECT "
+										+ "SUM(ITE.VLRTOT) AS TOTAL"
+										+ ", CAB.VLRFRETE "
+										+ ", SUM(ITE.VLRTOT) * VCAB.INDITENS AS TOTAL_PROP "
+										+ "FROM TGFITE ITE "
+										+ "JOIN TGFCAB CAB ON ITE.NUNOTA = CAB.NUNOTA "
+										+ "JOIN VGFCAB VCAB ON CAB.NUNOTA = VCAB.NUNOTA "
+										+ "WHERE ITE.NUNOTA = :NUNOTA AND ITE.USOPROD <> 'D' "
+										+ "GROUP BY CAB.VLRFRETE, VCAB.INDITENS");
+								qrySomaItens.setNamedParameter("NUNOTA", nuNotaEmp.getValue());
+								
+								ResultSet rs = qrySomaItens.executeQuery();
+								if (rs.next()) {
+									
+									if (rs.getBigDecimal(1).doubleValue() > vlrNota.doubleValue()) {
+										// entrando aqui significa que o desconto ja foi rateado para os itens
+										vlrDesconto = BigDecimalUtil.getRounded(((rs.getBigDecimal(1).add(rs.getBigDecimal(2))).multiply(vlrDescTot)).divide((vlrNota.add(vlrDescTot)),10,5),2);
+										
+										
+										System.out.println("[Sattva] - #Memoria Calculo Desconto: Total Itens: " 
+												+ rs.getBigDecimal(1) 
+												+ ", Vlr Frete: " 
+												+ rs.getBigDecimal(2)
+												+ ", Desconto Total: " + vlrDescTot + ", Valor do Pedido: " +  vlrNota.add(vlrDescTot));
+										System.out.println("(" + rs.getBigDecimal(1) + "+" + rs.getBigDecimal(2) + ") * " + vlrDescTot + " / (" + vlrNota + " + " + vlrDescTot + ")");
+										System.out.println("[Sattva] - Valor do desconto proporcional para a nota " + nuNotaEmp.getValue() + ": " + vlrDesconto);
+										
+										
+										
+									} else {
+										vlrDesconto = BigDecimalUtil.getRounded(((rs.getBigDecimal(1).add(rs.getBigDecimal(2))).multiply(vlrDescTot)).divide(vlrNota,10,5),2);
+										
+										System.out.println("[Sattva] - Memoria Calculo Desconto: Total Itens: " 
+												+ rs.getBigDecimal(1) 
+												+ ", Vlr Frete: " 
+												+ rs.getBigDecimal(2)
+												+ ", Desconto Total: " + vlrDescTot + ", Valor do Pedido: " +  vlrNota);
+										System.out.println("[Sattva] - Valor do desconto proporcional para a nota " + nuNotaEmp.getValue() + ": " + vlrDesconto);
+										
+									}
+									
+									cabecalhoDAO.prepareToUpdateByPK(nuNotaEmp.getValue()).set("VLRDESCTOT", vlrDesconto).update();
+									
+									System.out.println("[Sattva] - Atualizado desconto");
+									
+									/*
+									System.out.println("[Sattva] - Recalculando imposto e financeiro");
+			            			TdbHelper.recalculaImpostoEFinanceiro(nuNotaEmp.getValue());
+			            			System.out.println("[Sattva] - Recalculo finalizado");
+			            			*/
+									
+								}
 							}
+							
 						}
 						
 					}
-					
 					
 				}
 
@@ -369,20 +396,26 @@ public class SplitPedidosAcaoII implements AcaoRotinaJava {
 						BigDecimal codProd = itemPreSplitVO.asBigDecimal("CODPROD");
 						String nomeProduto = itemPreSplitVO.asString("Produto.DESCRPROD");
 			    		BigDecimal saldo = qtdNeg;
+			    		BigDecimal vlrUnit = itemPreSplitVO.asBigDecimal("VLRUNIT");
 			    		
 			    		DynamicVO produtoVO = produtoDAO.findOne("CODPROD = ?", codProd);
 			    		if("D".equals(produtoVO.asString("USOPROD"))) {
 			    			continue;
 			    		}
 			    		
-			    		BigDecimal estDisponivelEmp5 = verificaSaldoEstoqueAgrupando(empresa5, codProd);
-			    		BigDecimal estDisponivelEmp1 = verificaSaldoEstoqueAgrupando(empresa1, codProd);
-			    		BigDecimal estDisponivelEmp6 = verificaSaldoEstoqueAgrupando(empresa6, codProd);
+			    		BigDecimal estDisponivelEmp5 = verificaSaldoEstoqueAgrupando(empresa5, codProd, qtdNeg, codEmpOriginal);
+			    		BigDecimal estDisponivelEmp1 = verificaSaldoEstoqueAgrupando(empresa1, codProd, qtdNeg, codEmpOriginal);
+			    		BigDecimal estDisponivelEmp6 = verificaSaldoEstoqueAgrupando(empresa6, codProd, qtdNeg, codEmpOriginal);
 			    		
 			    		if ((estDisponivelEmp5.add(estDisponivelEmp1).add(estDisponivelEmp6)).doubleValue() < qtdNeg.doubleValue()) {
 			    			log += "\n Quantidade do Produto: " + codProd + ", [QtdNeg: " + qtdNeg + "] é maior que a quantidade geral do estoque [" 
 			    					+  (estDisponivelEmp5.add(estDisponivelEmp1).add(estDisponivelEmp6)).doubleValue() + "]";
-			    			continue;
+			    			
+			    			splitPedidos.add(new Split(empresa1, codProd, qtdNeg, vlrUnit));
+			    			
+			    			abortaPedidoPorFaltaDeEstoque = "S";
+							continue;
+			    			
 			    		}
 			    		
 			    		if (regraPrioridade.equals("516")) {
@@ -398,32 +431,32 @@ public class SplitPedidosAcaoII implements AcaoRotinaJava {
 			    		}
 			    		
 			    		if (regraPrioridade.equals("165")) {
-			    			BigDecimal saldoPendente = verificaDisponibilidade(empresa1, saldo, estDisponivelEmp1, false, itensTransferencia, codProd, splitPedidos);
-			    			saldoPendente = verificaDisponibilidade(empresa6, saldoPendente, estDisponivelEmp6, true, itensTransferencia, codProd, splitPedidos);
-			    			saldoPendente = verificaDisponibilidade(empresa5, saldoPendente, estDisponivelEmp5, false, itensTransferencia, codProd, splitPedidos);
+			    			BigDecimal saldoPendente = verificaDisponibilidade(empresa1, saldo, estDisponivelEmp1, false, itensTransferencia, codProd, splitPedidos, vlrUnit);
+			    			saldoPendente = verificaDisponibilidade(empresa6, saldoPendente, estDisponivelEmp6, true, itensTransferencia, codProd, splitPedidos, vlrUnit);
+			    			saldoPendente = verificaDisponibilidade(empresa5, saldoPendente, estDisponivelEmp5, false, itensTransferencia, codProd, splitPedidos, vlrUnit);
 			    		} 
 
 			    		if (regraPrioridade.equals("516")) {
-			    			BigDecimal saldoPendente = verificaDisponibilidade(empresa5, saldo, estDisponivelEmp5, false, itensTransferencia, codProd, splitPedidos);
-			    			saldoPendente = verificaDisponibilidade(empresa1, saldoPendente, estDisponivelEmp1, false, itensTransferencia, codProd, splitPedidos);
-			    			saldoPendente = verificaDisponibilidade(empresa6, saldoPendente, estDisponivelEmp6, true, itensTransferencia, codProd, splitPedidos);
+			    			BigDecimal saldoPendente = verificaDisponibilidade(empresa5, saldo, estDisponivelEmp5, false, itensTransferencia, codProd, splitPedidos, vlrUnit);
+			    			saldoPendente = verificaDisponibilidade(empresa1, saldoPendente, estDisponivelEmp1, false, itensTransferencia, codProd, splitPedidos, vlrUnit);
+			    			saldoPendente = verificaDisponibilidade(empresa6, saldoPendente, estDisponivelEmp6, true, itensTransferencia, codProd, splitPedidos, vlrUnit);
 			    		}
 						
 					}
 					
 				}
 
-				private BigDecimal verificaDisponibilidade(BigDecimal empresa, BigDecimal saldo, BigDecimal estDisponivel, boolean realizaTransferencia, Collection<Transferencia> itensTransferencia, BigDecimal codProd, Collection<Split> splitPedidos) {
+				private BigDecimal verificaDisponibilidade(BigDecimal empresa, BigDecimal saldo, BigDecimal estDisponivel, boolean realizaTransferencia, Collection<Transferencia> itensTransferencia, BigDecimal codProd, Collection<Split> splitPedidos, BigDecimal vlrUnit) {
 					//Estoque Total disponivel
 					if (saldo.doubleValue() > 0 && estDisponivel.doubleValue() > 0 && estDisponivel.doubleValue() >= saldo.doubleValue()) {
 						if (realizaTransferencia) {
 							geraTransferencia = true;
 							itensTransferencia.add(new Transferencia(codProd, saldo));
-							splitPedidos.add(new Split(empresa1, codProd, saldo));
+							splitPedidos.add(new Split(empresa1, codProd, saldo, vlrUnit));
 							log += "\nEstoque na empresa " + empresa + " com disponibilidade total do saldo";
 							log += "\nFazendo transferencia de " + saldo + " da empresa 6 para 1";
 						} else {
-							splitPedidos.add(new Split(empresa, codProd, saldo));
+							splitPedidos.add(new Split(empresa, codProd, saldo, vlrUnit));
 							log += "\nEstoque na empresa " + empresa + " com disponibilidade total do saldo";
 						}
 						return BigDecimal.ZERO;
@@ -434,11 +467,11 @@ public class SplitPedidosAcaoII implements AcaoRotinaJava {
 						if (realizaTransferencia) {
 							geraTransferencia = true;
 							itensTransferencia.add(new Transferencia(codProd, estDisponivel));
-							splitPedidos.add(new Split(empresa1, codProd, estDisponivel));
+							splitPedidos.add(new Split(empresa1, codProd, estDisponivel, vlrUnit));
 							log += "\nEstoque na empresa " + empresa + " com disponibilidade parcial. Saldo pendente: " + saldo.subtract(estDisponivel);
 							log += "\nFazendo transferencia de " + estDisponivel + " da empresa 6 para 1";
 						} else {
-							splitPedidos.add(new Split(empresa, codProd, estDisponivel));
+							splitPedidos.add(new Split(empresa, codProd, estDisponivel, vlrUnit));
 							log += "\nEstoque na empresa: " + empresa + " com disponibilidade parcial. Saldo pendente: " + saldo.subtract(estDisponivel);
 						}
 					}
@@ -446,12 +479,14 @@ public class SplitPedidosAcaoII implements AcaoRotinaJava {
 					return saldo.subtract(estDisponivel);
 				}
 
-				private BigDecimal verificaSaldoEstoqueAgrupando(BigDecimal codEmp, BigDecimal codProd) throws Exception {
+				private BigDecimal verificaSaldoEstoqueAgrupando(BigDecimal codEmp, BigDecimal codProd, BigDecimal qtdNeg, BigDecimal codEmpOriginal) throws Exception {
 					EntityFacade dwf = EntityFacadeFactory.getDWFFacade();
 					NativeSql sqlEstoqueDisponivel = new NativeSql(dwf.getJdbcWrapper());
 					sqlEstoqueDisponivel.loadSql(getClass(), "qryEstoqueDisponivel.sql");
 					sqlEstoqueDisponivel.setNamedParameter("CODEMP", codEmp);
 					sqlEstoqueDisponivel.setNamedParameter("CODPROD", codProd);
+					sqlEstoqueDisponivel.setNamedParameter("QTDNEG", qtdNeg);
+					sqlEstoqueDisponivel.setNamedParameter("CODEMPPEDIDO", codEmpOriginal);
 					
 					ResultSet rs = sqlEstoqueDisponivel.executeQuery();
 					if (rs.next()) {

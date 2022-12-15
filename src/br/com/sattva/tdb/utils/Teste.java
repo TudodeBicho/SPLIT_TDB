@@ -5,6 +5,8 @@ import java.sql.ResultSet;
 import java.util.ArrayList;
 import java.util.Collection;
 
+import com.sankhya.util.TimeUtils;
+
 import br.com.sankhya.jape.EntityFacade;
 import br.com.sankhya.jape.sql.NativeSql;
 import br.com.sankhya.modelcore.util.EntityFacadeFactory;
@@ -21,14 +23,16 @@ public class Teste {
 		Collection<Split> itensEmpresa1Agrupado2 = new ArrayList();
 		Collection<Split> itensEmpresa5Agrupado = new ArrayList();
 		
-		Split a = new Split(new BigDecimal("5"), new BigDecimal("107199"), new BigDecimal("30"));
-		Split b = new Split(new BigDecimal("1"), new BigDecimal("107199"), new BigDecimal("1150"));
-		Split c = new Split(new BigDecimal("1"), new BigDecimal("107199"), new BigDecimal("1"));
-		Split d = new Split(new BigDecimal("1"), new BigDecimal("107199"), new BigDecimal("9"));
-		Split z = new Split(new BigDecimal("1"), new BigDecimal("555"), new BigDecimal("9"));
-		Split e = new Split(new BigDecimal("5"), new BigDecimal("123"), new BigDecimal("2"));
-		Split f = new Split(new BigDecimal("5"), new BigDecimal("123"), new BigDecimal("3"));
-		Split g = new Split(new BigDecimal("5"), new BigDecimal("124"), new BigDecimal("3"));
+		TimeUtils.buildTimestamp(TimeUtils.getNow("dd/mm/yyyy"));
+		
+		Split a = new Split(new BigDecimal("5"), new BigDecimal("107199"), new BigDecimal("30"), BigDecimal.ONE);
+		Split b = new Split(new BigDecimal("1"), new BigDecimal("107199"), new BigDecimal("1150"), BigDecimal.ZERO);
+		Split c = new Split(new BigDecimal("1"), new BigDecimal("107199"), new BigDecimal("1"), BigDecimal.TEN);
+		Split d = new Split(new BigDecimal("1"), new BigDecimal("107199"), new BigDecimal("9"), BigDecimal.ZERO);
+		Split z = new Split(new BigDecimal("1"), new BigDecimal("555"), new BigDecimal("9"), BigDecimal.ZERO);
+		Split e = new Split(new BigDecimal("5"), new BigDecimal("123"), new BigDecimal("2"), BigDecimal.ZERO);
+		Split f = new Split(new BigDecimal("5"), new BigDecimal("123"), new BigDecimal("3"), BigDecimal.ZERO);
+		Split g = new Split(new BigDecimal("5"), new BigDecimal("124"), new BigDecimal("3"), BigDecimal.ZERO);
 		
 		quebraPedido.add(a); quebraPedido.add(b); quebraPedido.add(c); quebraPedido.add(d);
 		quebraPedido.add(e); quebraPedido.add(f); quebraPedido.add(g); quebraPedido.add(z);
@@ -64,7 +68,7 @@ public class Teste {
 		System.out.println(produtosNew.toString());
 		
 		for (BigDecimal produto : produtosNew) {
-			Split s = new Split(new BigDecimal("1"), produto, BigDecimal.ZERO);
+			Split s = new Split(new BigDecimal("1"), produto, BigDecimal.ZERO, BigDecimal.ZERO);
 			itensEmpresa1Agrupado.add(s);			
 		}
 		
@@ -76,7 +80,7 @@ public class Teste {
 				}
 			}
 			
-			itensEmpresa1Agrupado2.add(new Split(new BigDecimal("1"), sp.codProd, qtdSomada));
+			itensEmpresa1Agrupado2.add(new Split(new BigDecimal("1"), sp.codProd, qtdSomada, BigDecimal.ZERO));
 		}
 		
 		System.out.println("\n Agora vai \n");
@@ -84,19 +88,7 @@ public class Teste {
 		for (Split aa : itensEmpresa1Agrupado2) {
 			System.out.println(aa.toString());
 		}
-		
-		String t = "'CORREIOS'-'CORREIOS PAC'-'CORREIOS SEDEX'";
-		if (t.indexOf("CORREIOS SEDEX") > -1) {
-			System.out.println("Localizou!!!");
-		} else {
-			System.out.println("Nao Localizou!!!");
-		}
-		
-		
-		EntityFacade dwf = EntityFacadeFactory.getDWFFacade();
-		NativeSql ns = new NativeSql(dwf.getJdbcWrapper());
-
-		
+						
 	}
 
 }

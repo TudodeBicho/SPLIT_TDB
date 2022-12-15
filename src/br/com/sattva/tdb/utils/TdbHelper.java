@@ -44,7 +44,7 @@ public class TdbHelper {
 		return resulEstoque.getQtdEst();
 
 	}
-	
+	/*
 	public BigDecimal verificaSaldoEstoqueAgrupando(BigDecimal codEmp, BigDecimal codProd, BigDecimal codLocal) throws Exception {
 		EntityFacade dwf = EntityFacadeFactory.getDWFFacade();
 		NativeSql sqlEstoqueDisponivel = new NativeSql(dwf.getJdbcWrapper());
@@ -60,7 +60,7 @@ public class TdbHelper {
 			return BigDecimal.ZERO;
 		}
 	}
-
+*/
 	public static void transfereSaldo6x1(BigDecimal codProd, BigDecimal saldo) throws Exception {
 		// TODO Auto-generated method stub
 		
@@ -162,16 +162,21 @@ public class TdbHelper {
 		ArrayList<BigDecimal> nroUnicoNovosPedidos = new ArrayList<BigDecimal>();
 		ArrayList<BigDecimal> empresasCabecalho = new ArrayList<BigDecimal>();
 		Map<BigDecimal, BigDecimal> nuNotaCodEmp = new HashMap<BigDecimal, BigDecimal>();
-
+		
+		System.out.println("[Sattva] - PedidosSplit: " + pedidosSplit);
+		
 		empresasCabecalho.addAll(separaEmpresasCabecalho(pedidosSplit));
 		
 		for (BigDecimal codEmp : empresasCabecalho) {
+			System.out.println("[Sattva] - ......");
 			Map<String, Object> trocaInformacoesCab = new HashMap<>();
 			trocaInformacoesCab.put("CODEMP", codEmp);
 			trocaInformacoesCab.put("CODEMPNEGOC", codEmp);
 			trocaInformacoesCab.put("ORDEMCARGA", null);
 			trocaInformacoesCab.put("CODTIPOPER", buscaTopPosSplit());
 			trocaInformacoesCab.put("DHTIPOPER", getDhTipOper(buscaTopPosSplit()));
+			
+			System.out.println("[Sattva] - Verificação transporte: codEmp.intValue():" + codEmp.intValue() + ", empresasCabecalho.size(): " + empresasCabecalho.size());
 			
 			if (codEmp.intValue() != 5 && empresasCabecalho.size() > 1) {
 				trocaInformacoesCab.put("VLRFRETE", BigDecimal.ZERO);
@@ -183,8 +188,10 @@ public class TdbHelper {
 				if(pedidoVO.asString("BH_METODO") == null) {
 					
 				} else {
+					System.out.println("[Sattva] - bhMetodo anterior: " + pedidoVO.asString("BH_METODO"));
 					bhMetodo = transportadoras.indexOf(pedidoVO.asString("BH_METODO")) > -1 ? "JADLOG PACKAGE" : pedidoVO.asString("BH_METODO");					
 				}
+				System.out.println("[Sattva] - bhMetodo novo: " + bhMetodo);
 				
 				BigDecimal codParcTrans = BigDecimal.ZERO;
 				if(bhMetodo!= null) {
@@ -206,8 +213,10 @@ public class TdbHelper {
 				if(pedidoVO.asString("BH_METODO") == null) {
 					
 				} else {
+					System.out.println("[Sattva] - bhMetodo anterior: " + pedidoVO.asString("BH_METODO"));
 					bhMetodo = transportadoras.indexOf(pedidoVO.asString("BH_METODO")) > -1 ? pedidoVO.asString("BH_METODO") : "JADLOG PACKAGE";					
 				}
+				System.out.println("[Sattva] - bhMetodo novo: " + bhMetodo);
 				
 				BigDecimal codParcTrans = BigDecimal.ZERO;
 				if(bhMetodo!= null) {
@@ -230,8 +239,10 @@ public class TdbHelper {
 				if(pedidoVO.asString("BH_METODO") == null) {
 					
 				} else {
+					System.out.println("[Sattva] - bhMetodo anterior: " + pedidoVO.asString("BH_METODO"));
 					bhMetodo = transportadoras.indexOf(pedidoVO.asString("BH_METODO")) > -1 ? "JADLOG PACKAGE" : pedidoVO.asString("BH_METODO");					
 				}
+				System.out.println("[Sattva] - bhMetodo novo: " + bhMetodo);
 				
 				BigDecimal codParcTrans = BigDecimal.ZERO;
 				if(bhMetodo!= null) {
@@ -254,8 +265,10 @@ public class TdbHelper {
 				if(pedidoVO.asString("BH_METODO") == null) {
 					
 				} else {
+					System.out.println("[Sattva] - bhMetodo anterior: " + pedidoVO.asString("BH_METODO"));
 					bhMetodo = transportadoras.indexOf(pedidoVO.asString("BH_METODO")) > -1 ? pedidoVO.asString("BH_METODO") : "JADLOG PACKAGE";					
 				}
+				System.out.println("[Sattva] - bhMetodo novo: " + bhMetodo);
 				
 				BigDecimal codParcTrans = BigDecimal.ZERO;
 				if(bhMetodo!= null) {
@@ -357,6 +370,7 @@ public class TdbHelper {
 		        	.set("NUNOTAORIG", itemOldVO.asBigDecimal("NUNOTA"))
 		        	.set("DHINCLUSAO", TimeUtils.getNow())
 		        	.set("STATUSPROCESSAMENTO", "E")
+		        	.set("MSGSTATUS", "Erro ao tentar criar ligação na tgfvar")
 		        	.save();
 				}
 				
@@ -413,6 +427,8 @@ public static Map<String, BigDecimal> transfereSaldo6x1(Collection<Transferencia
 		final BigDecimal empresaOrigem = new BigDecimal("6");
 		
 		validaParametros();
+		
+		System.out.println("[Sattva] - NUNOTAORIG P/ TRANSFERENCIA: " + nuNotaOrig);
 		
 		JapeSessionContext.putProperty("usuario_logado", BigDecimal.ZERO);
 
@@ -478,6 +494,7 @@ public static Map<String, BigDecimal> transfereSaldo6x1(Collection<Transferencia
 			itemSaidaVO.setProperty("CODVOL", produtoVO.asString("CODVOL"));
 			itemSaidaVO.setProperty("ATUALESTOQUE", BigDecimal.ONE);
 			itemSaidaVO.setProperty("RESERVA", "S");
+			itemSaidaVO.setProperty("CODLOCALORIG", new BigDecimal("1001"));
 			dwf.createEntity("ItemNota", (EntityVO) itemSaidaVO);
 			
 			DynamicVO itemEntradaVO = (DynamicVO) dwf.getDefaultValueObjectInstance("ItemNota");
@@ -490,6 +507,7 @@ public static Map<String, BigDecimal> transfereSaldo6x1(Collection<Transferencia
 			itemEntradaVO.setProperty("CODVOL", produtoVO.asString("CODVOL"));
 			itemEntradaVO.setProperty("ATUALESTOQUE", BigDecimal.ZERO);
 			itemEntradaVO.setProperty("RESERVA", "N");
+			itemEntradaVO.setProperty("CODLOCALORIG", new BigDecimal("1001"));
 			dwf.createEntity("ItemNota", (EntityVO) itemEntradaVO);
 			
 			itemSaidaVO.clean();
@@ -628,6 +646,12 @@ public static Map<String, BigDecimal> transfereSaldo6x1(Collection<Transferencia
 			}
 		}
 		
+		finalSplit.addAll(itensEmpresa1);
+		finalSplit.addAll(itensEmpresa5);
+		
+		return finalSplit;
+		
+		/*
 		ArrayList<BigDecimal> produtosEmpresa1 = new ArrayList<BigDecimal>();
 		for(Split emp1 : itensEmpresa1) {
 			produtosEmpresa1.add(emp1.codProd);
@@ -641,13 +665,14 @@ public static Map<String, BigDecimal> transfereSaldo6x1(Collection<Transferencia
 		ArrayList<BigDecimal> produtosDistinctEmp1 = TdbHelper.removeDuplicates(produtosEmpresa1);
 		ArrayList<BigDecimal> produtosDistinctEmp5 = TdbHelper.removeDuplicates(produtosEmpresa5);
 		
+		
 		for (BigDecimal produtoEmpresa1 : produtosDistinctEmp1) {
-			Split s = new Split(new BigDecimal("1"), produtoEmpresa1, BigDecimal.ZERO);
+			Split s = new Split(new BigDecimal("1"), produtoEmpresa1, BigDecimal.ZERO, BigDecimal.ZERO);
 			itensEmpresa1Agrupado.add(s);			
 		}
 		
 		for (BigDecimal produtoEmpresa5 : produtosDistinctEmp5) {
-			Split s = new Split(new BigDecimal("5"), produtoEmpresa5, BigDecimal.ZERO);
+			Split s = new Split(new BigDecimal("5"), produtoEmpresa5, BigDecimal.ZERO, BigDecimal.ZERO);
 			itensEmpresa5Agrupado.add(s);			
 		}
 		
@@ -659,7 +684,8 @@ public static Map<String, BigDecimal> transfereSaldo6x1(Collection<Transferencia
 				}
 			}
 			
-			itensEmpresa1Agrupado2.add(new Split(new BigDecimal("1"), sp.codProd, qtdSomada));
+			itensEmpresa1Agrupado2.add(new Split(new BigDecimal("1"), sp.codProd, qtdSomada, BigDecimal.ZERO));
+//			itensEmpresa1Agrupado2.add(new Split(new BigDecimal("1"), sp.codProd, sp.qtdNeg, sp.vlrUnit));
 		}
 		
 		for (Split sp : itensEmpresa5Agrupado) {
@@ -670,14 +696,15 @@ public static Map<String, BigDecimal> transfereSaldo6x1(Collection<Transferencia
 				}
 			}
 			
-			itensEmpresa5Agrupado2.add(new Split(new BigDecimal("5"), sp.codProd, qtdSomada));
+			itensEmpresa5Agrupado2.add(new Split(new BigDecimal("5"), sp.codProd, qtdSomada, BigDecimal.ZERO));
+//			itensEmpresa5Agrupado2.add(new Split(new BigDecimal("5"), sp.codProd, sp.qtdNeg, sp.vlrUnit));
 		}
 		
 		finalSplit.addAll(itensEmpresa1Agrupado2);
 		finalSplit.addAll(itensEmpresa5Agrupado2);
 		
 		return finalSplit;
-		
+		*/
 	}
 	
 	
@@ -713,7 +740,7 @@ public static Map<String, BigDecimal> transfereSaldo6x1(Collection<Transferencia
 			return BigDecimal.ZERO;
 		}
 	}
-
+/*
 	public String verificaDisponibilidade156(Collection<DynamicVO> itensPedido, String log, BigDecimal nuNotaOrig, Collection<Split> splitPedidos, boolean geraTransferencia, Collection<Transferencia> itensTransferencia) throws Exception {
 		
 		JapeWrapper produtoDAO = JapeFactory.dao("Produto");
@@ -815,7 +842,8 @@ public static Map<String, BigDecimal> transfereSaldo6x1(Collection<Transferencia
 		
 		return log;
 	}
-
+*/
+	/*
 	public String verificaDisponibilidade516(Collection<DynamicVO> itensPedido, String log, BigDecimal nuNotaOrig, Collection<Split> splitPedidos, boolean geraTransferencia, Collection<Transferencia> itensTransferencia) throws Exception {
 		
 		JapeWrapper produtoDAO = JapeFactory.dao("Produto");
@@ -916,7 +944,7 @@ public static Map<String, BigDecimal> transfereSaldo6x1(Collection<Transferencia
     	}
 	return log;
 	}
-
+*/
 	public static void vinculaTgfvar(Map<BigDecimal, BigDecimal> listaNroUnicoEmpresa, BigDecimal nuNotaOriginal) throws Exception {
 		System.out.println("[Sattva] - Fazendo ligações na TGFVAR - Inicio");
 		JapeWrapper tgfvarDAO = JapeFactory.dao("CompraVendavariosPedido");
@@ -950,6 +978,7 @@ public static Map<String, BigDecimal> transfereSaldo6x1(Collection<Transferencia
 		        	.set("NUNOTAORIG", itemOldVO.asBigDecimal("NUNOTA"))
 		        	.set("DHINCLUSAO", TimeUtils.getNow())
 		        	.set("STATUSPROCESSAMENTO", "E")
+		        	.set("MSGSTATUS", "Erro ao tentar criar ligação na tgfvar")
 		        	.save();
 				}
 				

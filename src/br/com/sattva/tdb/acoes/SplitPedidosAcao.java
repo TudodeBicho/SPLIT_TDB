@@ -387,6 +387,22 @@ public class SplitPedidosAcao implements AcaoRotinaJava {
 			return BigDecimal.ZERO;
 		}
 	}
+	
+	private BigDecimal verificaSaldoEstoqueAgrupando(BigDecimal codEmp, BigDecimal codProd, BigDecimal qtdNeg) throws Exception {
+		EntityFacade dwf = EntityFacadeFactory.getDWFFacade();
+		NativeSql sqlEstoqueDisponivel = new NativeSql(dwf.getJdbcWrapper());
+		sqlEstoqueDisponivel.loadSql(getClass(), "qryEstoqueDisponivel.sql");
+		sqlEstoqueDisponivel.setNamedParameter("CODEMP", codEmp);
+		sqlEstoqueDisponivel.setNamedParameter("CODPROD", codProd);
+		sqlEstoqueDisponivel.setNamedParameter("QTDNEG", qtdNeg);
+
+		ResultSet rs = sqlEstoqueDisponivel.executeQuery();
+		if (rs.next()) {
+			return rs.getBigDecimal(1);
+		} else {
+			return BigDecimal.ZERO;
+		}
+	}
 
 	private String buscaCidadeDestino(BigDecimal codCidadeDestino) throws Exception {
 		if (codCidadeDestino == null) {
@@ -445,6 +461,7 @@ public class SplitPedidosAcao implements AcaoRotinaJava {
 			BigDecimal codProd = itemPreSplitVO.asBigDecimal("CODPROD");
 			String nomeProduto = itemPreSplitVO.asString("Produto.DESCRPROD");
 			BigDecimal saldo = qtdNeg;
+			BigDecimal vlrUnit = itemPreSplitVO.asBigDecimal("VLRUNIT");
 			
 			PersistentLocalEntity registroPLE = dwf.findEntityByPrimaryKey("Produto", codProd);
 			DynamicVO produtoVO = (DynamicVO) registroPLE.getValueObject();
@@ -454,9 +471,9 @@ public class SplitPedidosAcao implements AcaoRotinaJava {
 				continue;
 			}
 
-			BigDecimal estDisponivelEmp5 = verificaSaldoEstoqueAgrupando(empresa5, codProd);
-			BigDecimal estDisponivelEmp1 = verificaSaldoEstoqueAgrupando(empresa1, codProd);
-			BigDecimal estDisponivelEmp6 = verificaSaldoEstoqueAgrupando(empresa6, codProd);
+			BigDecimal estDisponivelEmp5 = verificaSaldoEstoqueAgrupando(empresa5, codProd, qtdNeg);
+			BigDecimal estDisponivelEmp1 = verificaSaldoEstoqueAgrupando(empresa1, codProd, qtdNeg);
+			BigDecimal estDisponivelEmp6 = verificaSaldoEstoqueAgrupando(empresa6, codProd, qtdNeg);
 
 			if ((estDisponivelEmp5.add(estDisponivelEmp1).add(estDisponivelEmp6)).doubleValue() < qtdNeg
 					.doubleValue()) {
@@ -475,35 +492,33 @@ public class SplitPedidosAcao implements AcaoRotinaJava {
 			}
 
 			if (regraPrioridade.equals("165")) {
-				BigDecimal saldoPendente = verificaDisponibilidade(empresa1, saldo, estDisponivelEmp1, false, itensTransferencia, codProd, splitPedidos);
-				saldoPendente = verificaDisponibilidade(empresa6, saldoPendente, estDisponivelEmp6, true, itensTransferencia, codProd, splitPedidos);
-				saldoPendente = verificaDisponibilidade(empresa5, saldoPendente, estDisponivelEmp5, false, itensTransferencia, codProd, splitPedidos);
+				BigDecimal saldoPendente = verificaDisponibilidade(empresa1, saldo, estDisponivelEmp1, false, itensTransferencia, codProd, splitPedidos, vlrUnit);
+				saldoPendente = verificaDisponibilidade(empresa6, saldoPendente, estDisponivelEmp6, true, itensTransferencia, codProd, splitPedidos, vlrUnit);
+				saldoPendente = verificaDisponibilidade(empresa5, saldoPendente, estDisponivelEmp5, false, itensTransferencia, codProd, splitPedidos, vlrUnit);
 			}
 
 			if (regraPrioridade.equals("516")) {
-				BigDecimal saldoPendente = verificaDisponibilidade(empresa5, saldo, estDisponivelEmp5, false, itensTransferencia, codProd, splitPedidos);
-				saldoPendente = verificaDisponibilidade(empresa1, saldoPendente, estDisponivelEmp1, false, itensTransferencia, codProd, splitPedidos);
-				saldoPendente = verificaDisponibilidade(empresa6, saldoPendente, estDisponivelEmp6, true, itensTransferencia, codProd, splitPedidos);
+				BigDecimal saldoPendente = verificaDisponibilidade(empresa5, saldo, estDisponivelEmp5, false, itensTransferencia, codProd, splitPedidos, vlrUnit);
+				saldoPendente = verificaDisponibilidade(empresa1, saldoPendente, estDisponivelEmp1, false, itensTransferencia, codProd, splitPedidos, vlrUnit);
+				saldoPendente = verificaDisponibilidade(empresa6, saldoPendente, estDisponivelEmp6, true, itensTransferencia, codProd, splitPedidos, vlrUnit);
 			}
 
 		}
 
 	}
 
-	private BigDecimal verificaDisponibilidade(BigDecimal empresa, BigDecimal saldo, BigDecimal estDisponivel,
-			boolean realizaTransferencia, Collection<Transferencia> itensTransferencia, BigDecimal codProd,
-			Collection<Split> splitPedidos) {
+	private BigDecimal verificaDisponibilidade(BigDecimal empresa, BigDecimal saldo, BigDecimal estDisponivel, boolean realizaTransferencia, Collection<Transferencia> itensTransferencia, BigDecimal codProd, Collection<Split> splitPedidos, BigDecimal vlrUnit) {
 		// Estoque Total disponivel
 		if (saldo.doubleValue() > 0 && estDisponivel.doubleValue() > 0
 				&& estDisponivel.doubleValue() >= saldo.doubleValue()) {
 			if (realizaTransferencia) {
 				geraTransferencia = true;
 				itensTransferencia.add(new Transferencia(codProd, saldo));
-				splitPedidos.add(new Split(empresa1, codProd, saldo));
+				splitPedidos.add(new Split(empresa1, codProd, saldo, vlrUnit));
 				log += "\nEstoque na empresa " + empresa + " com disponibilidade total do saldo";
 				log += "\nFazendo transferencia de " + saldo + " da empresa 6 para 1";
 			} else {
-				splitPedidos.add(new Split(empresa, codProd, saldo));
+				splitPedidos.add(new Split(empresa, codProd, saldo, vlrUnit));
 				log += "\nEstoque na empresa " + empresa + " com disponibilidade total do saldo";
 			}
 			return BigDecimal.ZERO;
@@ -515,12 +530,12 @@ public class SplitPedidosAcao implements AcaoRotinaJava {
 			if (realizaTransferencia) {
 				geraTransferencia = true;
 				itensTransferencia.add(new Transferencia(codProd, estDisponivel));
-				splitPedidos.add(new Split(empresa1, codProd, estDisponivel));
+				splitPedidos.add(new Split(empresa1, codProd, estDisponivel, vlrUnit));
 				log += "\nEstoque na empresa " + empresa + " com disponibilidade parcial. Saldo pendente: "
 						+ saldo.subtract(estDisponivel);
 				log += "\nFazendo transferencia de " + estDisponivel + " da empresa 6 para 1";
 			} else {
-				splitPedidos.add(new Split(empresa, codProd, estDisponivel));
+				splitPedidos.add(new Split(empresa, codProd, estDisponivel, vlrUnit));
 				log += "\nEstoque na empresa: " + empresa + " com disponibilidade parcial. Saldo pendente: "
 						+ saldo.subtract(estDisponivel);
 			}

@@ -6,11 +6,13 @@ public class Split {
 	public BigDecimal codEmp;
 	public BigDecimal codProd;
 	public BigDecimal qtdNeg = BigDecimal.ZERO;
+	public BigDecimal vlrUnit;
 
-	public Split(BigDecimal codEmp, BigDecimal codProd, BigDecimal qtdNeg) {
+	public Split(BigDecimal codEmp, BigDecimal codProd, BigDecimal qtdNeg, BigDecimal vlrUnit) {
 		this.codEmp = codEmp;
 		this.codProd = codProd;
 		this.qtdNeg = qtdNeg;
+		this.vlrUnit = vlrUnit;
 	}
 	
 	public Split() {
@@ -22,6 +24,6 @@ public class Split {
 	}
 	
 	public String toString() {
-		return "[Empresa: " + codEmp + ", Produto: " + codProd + ", Quantidade: " + qtdNeg +"]";
+		return "[Empresa: " + codEmp + ", Produto: " + codProd + ", Quantidade: " + qtdNeg + ", Valor.Unit: " + vlrUnit +"]";
 	}
 }
