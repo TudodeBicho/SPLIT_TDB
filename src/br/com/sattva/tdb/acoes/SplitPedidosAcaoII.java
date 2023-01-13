@@ -74,12 +74,17 @@ public class SplitPedidosAcaoII implements AcaoRotinaJava {
 						
 						BigDecimal vlrDescTotCab = pedidoVO.asBigDecimal("VLRDESCTOT");
 						BigDecimal vlrDescTotItem = pedidoVO.asBigDecimal("VLRDESCTOTITEM");
+//						BigDecimal vlrDescTot = vlrDescTotItem.add(vlrDescTotCab);
+						
+						BigDecimal vlrDescTot = vlrDescTotCab;
+						
+						if (vlrDescTot.doubleValue() == 0) {
+							vlrDescTot = vlrDescTotItem;
+						}
 //						BigDecimal vlrFrete = pedidoVO.asBigDecimal("VLRFRETE");
 						BigDecimal vlrNota = pedidoVO.asBigDecimal("VLRNOTA").add(pedidoVO.asBigDecimal("VLRDESCTOT"));
 						
 						codEmpOriginal = pedidoVO.asBigDecimal("CODEMP");
-						
-						BigDecimal vlrDescTot = vlrDescTotItem.add(vlrDescTotCab);
 						
 						log = "";
 						regraPrioridade = "";

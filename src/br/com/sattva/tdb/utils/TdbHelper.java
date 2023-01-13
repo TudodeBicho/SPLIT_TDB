@@ -451,6 +451,7 @@ public static Map<String, BigDecimal> transfereSaldo6x1(Collection<Transferencia
 		notaTransferenciaVO.setProperty("NUMNOTA", BigDecimal.ZERO);
 		notaTransferenciaVO.setProperty("CIF_FOB", cabModeloSaidaVO.asString("CIF_FOB"));
 		notaTransferenciaVO.setProperty("AD_NUNOTAORIG", nuNotaOrig);
+		notaTransferenciaVO.setProperty("BH_METODO", cabModeloSaidaVO.asString("BH_METODO"));
 		dwf.createEntity("CabecalhoNota", (EntityVO) notaTransferenciaVO);
 		
 		BigDecimal nuNotaModeloEntrada = buscaNunotaModeloEntrada();
@@ -470,8 +471,9 @@ public static Map<String, BigDecimal> transfereSaldo6x1(Collection<Transferencia
 		pedidoCompraTransfVO.setProperty("DTENTSAI", TimeUtils.getNow());
 		pedidoCompraTransfVO.setProperty("DTFATUR", TimeUtils.getNow());
 		pedidoCompraTransfVO.setProperty("NUMNOTA", BigDecimal.ZERO);
-		notaTransferenciaVO.setProperty("CIF_FOB", cabModeloEntradaVO.asString("CIF_FOB"));
-		notaTransferenciaVO.setProperty("AD_NUNOTAORIG", nuNotaOrig);
+		pedidoCompraTransfVO.setProperty("CIF_FOB", cabModeloEntradaVO.asString("CIF_FOB"));
+		pedidoCompraTransfVO.setProperty("AD_NUNOTAORIG", nuNotaOrig);
+		pedidoCompraTransfVO.setProperty("BH_METODO", cabModeloEntradaVO.asString("BH_METODO"));
 		dwf.createEntity("CabecalhoNota", (EntityVO) pedidoCompraTransfVO);
 		
 		BigDecimal nuNotaTransfEntrada = pedidoCompraTransfVO.asBigDecimal("NUNOTA");

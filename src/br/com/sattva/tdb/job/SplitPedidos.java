@@ -61,6 +61,12 @@ public class SplitPedidos implements ScheduledAction {
 			ResultSet rs = sqlPedidosAptos.executeQuery();
 			while (rs.next()) {
 				BigDecimal vlrDescTot = rs.getBigDecimal("VLRDESCTOT");
+				BigDecimal vlrDescTotItem = rs.getBigDecimal("VLRDESCTOTITEM");
+				
+				if (vlrDescTot.doubleValue() == 0) {
+					vlrDescTot = vlrDescTotItem;
+				}
+				
 				BigDecimal vlrNota = rs.getBigDecimal("VLRNOTA").add(rs.getBigDecimal("VLRDESCTOT"));
 				codEmpOriginal = rs.getBigDecimal("CODEMP");
 				log = "";
@@ -140,8 +146,7 @@ public class SplitPedidos implements ScheduledAction {
 */
 				if (geraTransferencia) {
 					System.out.println("[Sattva] - Gerando Transferencias - Inicio");
-					Map<String, BigDecimal> nroUnicoTransf = TdbHelper.transfereSaldo6x1(itensTransferencia,
-							nuNotaPreSplit);
+					Map<String, BigDecimal> nroUnicoTransf = TdbHelper.transfereSaldo6x1(itensTransferencia, nuNotaPreSplit);
 					log += "\n\nNro.Unico.Transferencia Saida..: " + nroUnicoTransf.get("NUNOTATRANSFSAIDA");
 					log += "\nNro.Unico.Transferencia Entrada: " + nroUnicoTransf.get("NUNOTATRANSFENTRADA") + "\n";
 
@@ -206,16 +211,21 @@ public class SplitPedidos implements ScheduledAction {
 		System.out.println("[Sattva] - Refazendo os valores dos pedidos - Fim");
 	}
 
-	private void atualizaDesconto(Map<BigDecimal, BigDecimal> listaNroUnicoEmpresa, BigDecimal vlrNota,
-			BigDecimal vlrDescTot, BigDecimal saldoDesconto2) throws Exception {
+	private void atualizaDesconto(Map<BigDecimal, BigDecimal> listaNroUnicoEmpresa, BigDecimal vlrNota, BigDecimal vlrDescTot, BigDecimal saldoDesconto2) throws Exception {
 		System.out.println("[Sattva] - Atualizando desconto dos lançamentos splitados - Inicio");
 		System.out.println("[Sattva] - Lista de Nro.Unico p/ desconto: " + listaNroUnicoEmpresa);
-		System.out.println("[Sattva] - Saldo Desconto: " + saldoDesconto);
+//		System.out.println("[Sattva] - Saldo Desconto: " + saldoDesconto);
 
 		BigDecimal vlrDesconto = BigDecimal.ZERO;
 		
 		if (listaNroUnicoEmpresa.size() == 1) {
 			vlrDesconto = vlrDescTot;
+			
+			for (Map.Entry<BigDecimal, BigDecimal> nuNotaEmp : listaNroUnicoEmpresa.entrySet()) {
+				cabecalhoDAO.prepareToUpdateByPK(nuNotaEmp.getValue()).set("VLRDESCTOT", vlrDesconto).update();
+			}
+			
+			System.out.println("[Sattva] - Lista unica de nro unico, não tem conta no desconto. Considera valor cheio: " + vlrDesconto);
 		} else {
 			
 			for (Map.Entry<BigDecimal, BigDecimal> nuNotaEmp : listaNroUnicoEmpresa.entrySet()) {
