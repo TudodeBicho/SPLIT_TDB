@@ -10,12 +10,12 @@
 	<classpathentry kind="lib" path="lib/jape-4.6b292.jar"/>
 	<classpathentry kind="lib" path="lib/javax.ejb.jar"/>
 	<classpathentry kind="lib" path="lib/javax.servlet.jar"/>
-	<classpathentry kind="lib" path="lib/mge-modelcore-4.6b292.jar"/>
 	<classpathentry kind="lib" path="lib/mysql-connector-java-5.1.9.jar"/>
 	<classpathentry kind="lib" path="lib/SankhyaW-extensions.jar"/>
 	<classpathentry kind="lib" path="lib/sanutil-4.6b292.jar"/>
 	<classpathentry kind="lib" path="lib/mgecom-model-4.12b160.jar"/>
 	<classpathentry kind="lib" path="lib/sanws-4.10b143.jar"/>
 	<classpathentry kind="lib" path="lib/jxl-2.6.jar"/>
+	<classpathentry kind="lib" path="lib/mge-modelcore-4.12b160.jar"/>
 	<classpathentry kind="output" path="bin"/>
 </classpath>

@@ -174,11 +174,9 @@ public class SplitPedidos implements ScheduledAction {
 
 				TdbHelper.vinculaTgfvar(listaNroUnicoEmpresa, pedidoVO.asBigDecimal("NUNOTA"));
 
-				cabecalhoDAO.prepareToUpdate(pedidoVO).set("CODTIPOPER", topPreSplit)
-						.set("DHTIPOPER", TdbHelper.getDhTipOper(topPreSplit)).update();
+				cabecalhoDAO.prepareToUpdate(pedidoVO).set("CODTIPOPER", topPreSplit).set("DHTIPOPER", TdbHelper.getDhTipOper(topPreSplit)).update();
 
-				logDAO.create().set("DESCRICAO", log.toCharArray()).set("NUNOTAORIG", pedidoVO.asBigDecimal("NUNOTA"))
-						.set("DHINCLUSAO", TimeUtils.getNow()).set("STATUSPROCESSAMENTO", statusProcessamento).save();
+				logDAO.create().set("DESCRICAO", log.toCharArray()).set("NUNOTAORIG", pedidoVO.asBigDecimal("NUNOTA")).set("DHINCLUSAO", TimeUtils.getNow()).set("STATUSPROCESSAMENTO", statusProcessamento).save();
 
 				abortaPedidoPorFaltaDeEstoque = "N";
 

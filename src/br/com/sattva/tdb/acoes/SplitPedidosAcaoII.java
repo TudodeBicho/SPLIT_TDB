@@ -22,7 +22,6 @@ import br.com.sankhya.jape.wrapper.JapeWrapper;
 import br.com.sankhya.modelcore.util.EntityFacadeFactory;
 import br.com.sattva.tdb.job.Split;
 import br.com.sattva.tdb.job.Transferencia;
-import br.com.sattva.tdb.utils.CentralNotasUtils;
 import br.com.sattva.tdb.utils.TdbHelper;
 
 public class SplitPedidosAcaoII implements AcaoRotinaJava {
